@@ -40,7 +40,25 @@ function normalizeLimits(input = {}) {
 }
 
 function resolveDatabaseUrl() {
-  return process.env.COMMAND_LIMITS_DATABASE_URL ?? process.env.DATABASE_URL;
+  const externalDatabaseUrl = process.env.COMMAND_LIMITS_DATABASE_URL ?? process.env.DATABASE_URL;
+  if (externalDatabaseUrl) {
+    return externalDatabaseUrl;
+  }
+
+  const localEnabledRaw = (process.env.COMMAND_LIMITS_LOCAL_POSTGRES_ENABLED ?? "").trim().toLowerCase();
+  const localEnabled = localEnabledRaw === "1" || localEnabledRaw === "true" || localEnabledRaw === "yes";
+  if (!localEnabled) {
+    return undefined;
+  }
+
+  const localPort = (process.env.COMMAND_LIMITS_LOCAL_POSTGRES_PORT ?? "").trim();
+  if (!localPort) {
+    throw new Error(
+      "COMMAND_LIMITS_LOCAL_POSTGRES_PORT is required when COMMAND_LIMITS_LOCAL_POSTGRES_ENABLED is enabled",
+    );
+  }
+
+  return `postgres://cloud_mcp:cloud_mcp@127.0.0.1:${localPort}/cloud_mcp`;
 }
 
 function createInMemoryStore(logger) {

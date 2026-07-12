@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: cloud_mcp
       POSTGRES_PASSWORD: cloud_mcp
     ports:
-      - "5432:5432"
+      - "${COMMAND_LIMITS_LOCAL_POSTGRES_PORT:?Set COMMAND_LIMITS_LOCAL_POSTGRES_PORT}:5432"
     volumes:
       - cloud-mcp-postgres-data:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro

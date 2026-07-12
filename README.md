@@ -93,12 +93,22 @@ Database environment variables:
 
 - `COMMAND_LIMITS_DATABASE_URL` (preferred), or
 - `DATABASE_URL`
+- `COMMAND_LIMITS_LOCAL_POSTGRES_ENABLED` (optional): when `true|1|yes` and no external DB URL is set, auto-uses local postgres URL.
+- `COMMAND_LIMITS_LOCAL_POSTGRES_PORT` (required when local postgres auto-mode is enabled): local postgres port used to build the DB URL.
 
 If neither database variable is set, command limits run in in-memory mode.
+
+Database resolution order:
+
+1. Use `COMMAND_LIMITS_DATABASE_URL` when set.
+2. Else use `DATABASE_URL` when set.
+3. Else if `COMMAND_LIMITS_LOCAL_POSTGRES_ENABLED=true|1|yes`, require `COMMAND_LIMITS_LOCAL_POSTGRES_PORT` and use `postgres://cloud_mcp:cloud_mcp@127.0.0.1:<port>/cloud_mcp`.
+4. Else run in-memory mode.
 
 Start local PostgreSQL from repository assets:
 
 ```bash
+export COMMAND_LIMITS_LOCAL_POSTGRES_PORT=5432
 docker compose -f docker-compose.postgres.yml up -d
 export COMMAND_LIMITS_DATABASE_URL="postgres://cloud_mcp:cloud_mcp@127.0.0.1:5432/cloud_mcp"
 ```

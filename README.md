@@ -94,6 +94,39 @@ It registers these tools:
 - `run_azure`
 - `run_oci`
 
+## Single container setup
+
+This repository is set up to run as a single container image that includes:
+
+- Node.js runtime
+- cloud-mcp application
+- AWS, GCP, Azure, and OCI CLIs inside `mcp/<provider>/bin`
+
+Build the image:
+
+```bash
+docker build -t cloud-mcp:local .
+```
+
+Run MCP mode (default):
+
+```bash
+docker run --rm -i cloud-mcp:local
+```
+
+Run direct CLI mode:
+
+```bash
+docker run --rm cloud-mcp:local cli list
+docker run --rm cloud-mcp:local cli aws sts get-caller-identity
+```
+
+The container entrypoint supports:
+
+- `mcp` for `node src/mcp.js`
+- `cli` for `node src/index.js`
+- Any other first argument is treated as direct CLI arguments for backward compatibility
+
 ## Configuration
 
 Create `cloud-wrap.config.json` using `cloud-wrap.config.example.json` as a template.

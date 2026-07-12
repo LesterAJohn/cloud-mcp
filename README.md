@@ -94,6 +94,12 @@ It registers these tools:
 - `run_azure`
 - `run_oci`
 
+Provider vault authorization:
+
+- Set `MCP_PROVIDER_AUTH_KEY` to store an authorization key in vault at startup.
+- When configured, `get_provider` and `set_provider` require `authorizationKey` in the request input.
+- Requests with missing or invalid keys are rejected.
+
 ## Single container setup
 
 This repository is set up to run as a single container image that includes:
@@ -168,6 +174,19 @@ For external vault integrations, these environment variables are forwarded into 
 - `VAULT_KV_MOUNT`
 - `VAULT_KV_VERSION`
 - `VAULT_SECRET_PATH`
+
+Required vault key contract:
+
+- Required environment variables for explicit external mode:
+  - `VAULT_PROVIDER=external`
+  - `VAULT_ADDR`
+  - `VAULT_TOKEN`
+- Required secret key at each provider path:
+  - key name: `provider`
+  - required object fields: `command` (string), `env` (object)
+- Provider authorization key (when enabled):
+  - set `MCP_PROVIDER_AUTH_KEY` to seed vault path `mcp.authorization.providerKey`
+  - `get_provider` and `set_provider` requests must include `authorizationKey` matching that value
 
 When using the built-in external adapter, `VAULT_SECRET_PATH` is treated as a base path and each cloud CLI provider is stored separately:
 

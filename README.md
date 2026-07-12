@@ -282,6 +282,7 @@ Provider vault authorization:
 
 - Set `MCP_PROVIDER_AUTH_KEY` to store an authorization key in vault at startup.
 - When configured, `get_provider` and `set_provider` require `authorizationKey` in the request input.
+- When configured, `set_command_limit_section`, `replace_command_limits`, and `push_command_limits` also require `authorizationKey`.
 - Requests with missing or invalid keys are rejected.
 
 ## Single container setup

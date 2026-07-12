@@ -161,6 +161,7 @@ function registerCommandLimitsTools(mcpServer, ctx) {
     {
       description: "Set one provider command-limit section in database and force-push cloud-command-limits JSON",
       inputSchema: {
+        authorizationKey: z.string().min(1).optional().describe("Provider vault authorization key"),
         provider: z
           .enum([
             "aws",
@@ -202,7 +203,8 @@ function registerCommandLimitsTools(mcpServer, ctx) {
           .describe("Force-push target for cloud-command-limits JSON"),
       },
     },
-    async ({ provider, allowedPrefixes, pushTarget }) => {
+    async ({ provider, allowedPrefixes, pushTarget, authorizationKey }) => {
+      validateProviderAuthorization(ctx, authorizationKey);
       const limits = await setProviderCommandLimits(ctx, provider, allowedPrefixes);
       const pushed = await forcePushCommandLimits(ctx, pushTarget);
       return toTextContent({
@@ -218,6 +220,7 @@ function registerCommandLimitsTools(mcpServer, ctx) {
     {
       description: "Replace all command-limit sections in database and force-push cloud-command-limits JSON",
       inputSchema: {
+        authorizationKey: z.string().min(1).optional().describe("Provider vault authorization key"),
         commandLimits: z
           .object({
             "aws.*": z.array(z.string()).default([]),
@@ -237,7 +240,8 @@ function registerCommandLimitsTools(mcpServer, ctx) {
           .describe("Force-push target for cloud-command-limits JSON"),
       },
     },
-    async ({ commandLimits, pushTarget }) => {
+    async ({ commandLimits, pushTarget, authorizationKey }) => {
+      validateProviderAuthorization(ctx, authorizationKey);
       const limits = await replaceCommandLimits(ctx, commandLimits);
       const pushed = await forcePushCommandLimits(ctx, pushTarget);
       return toTextContent({ limits, pushed });
@@ -249,13 +253,17 @@ function registerCommandLimitsTools(mcpServer, ctx) {
     {
       description: "Force-push DB command limits to internal or external cloud-command-limits JSON",
       inputSchema: {
+        authorizationKey: z.string().min(1).optional().describe("Provider vault authorization key"),
         pushTarget: z
           .enum(["auto", "internal", "external"])
           .default("auto")
           .describe("Force-push target for cloud-command-limits JSON"),
       },
     },
-    async ({ pushTarget }) => toTextContent(await forcePushCommandLimits(ctx, pushTarget)),
+    async ({ pushTarget, authorizationKey }) => {
+      validateProviderAuthorization(ctx, authorizationKey);
+      return toTextContent(await forcePushCommandLimits(ctx, pushTarget));
+    },
   );
 }
 

@@ -195,3 +195,100 @@ test("set_provider requires authorization key when configured", async () => {
     }
   }
 });
+
+test("command-limit admin tools require authorization key when configured", async () => {
+  const previousAuthKey = process.env.MCP_PROVIDER_AUTH_KEY;
+  process.env.MCP_PROVIDER_AUTH_KEY = "provider-secret";
+
+  try {
+    const tempDir = await mkdtemp(path.join(tmpdir(), "cloud-mcp-admin-auth-"));
+    const targetPath = path.join(tempDir, "cloud-command-limits.json");
+
+    try {
+      const { mcpServer } = await createCloudMcpServer({
+        config: "cloud-wrap.config.example.json",
+        logLevel: "silent",
+        commandLimitsPath: targetPath,
+      });
+
+      await assert.rejects(
+        async () =>
+          mcpServer._registeredTools.set_command_limit_section.handler({
+            provider: "gcloud.*",
+            allowedPrefixes: ["projects.list"],
+            pushTarget: "internal",
+          }),
+        /Unauthorized: invalid authorizationKey/,
+      );
+
+      await assert.rejects(
+        async () =>
+          mcpServer._registeredTools.replace_command_limits.handler({
+            commandLimits: {
+              "aws.*": [],
+              "gcp.*": ["projects.list"],
+              "azure.*": [],
+              "oci.*": [],
+              "alibaba.*": [],
+              "digitalocean.*": [],
+              "ibmcloud.*": [],
+              "tencent.*": [],
+              "huawei.*": [],
+            },
+            pushTarget: "internal",
+          }),
+        /Unauthorized: invalid authorizationKey/,
+      );
+
+      await assert.rejects(
+        async () =>
+          mcpServer._registeredTools.push_command_limits.handler({
+            pushTarget: "internal",
+          }),
+        /Unauthorized: invalid authorizationKey/,
+      );
+
+      const setSectionResult = await mcpServer._registeredTools.set_command_limit_section.handler({
+        provider: "gcloud.*",
+        allowedPrefixes: ["projects.list"],
+        pushTarget: "internal",
+        authorizationKey: "provider-secret",
+      });
+      const setSectionPayload = JSON.parse(setSectionResult.content[0].text);
+      assert.deepEqual(setSectionPayload.limits["gcp.*"], ["projects.list"]);
+
+      const replaceResult = await mcpServer._registeredTools.replace_command_limits.handler({
+        commandLimits: {
+          "aws.*": ["sts"],
+          "gcp.*": [],
+          "azure.*": [],
+          "oci.*": [],
+          "alibaba.*": [],
+          "digitalocean.*": [],
+          "ibmcloud.*": [],
+          "tencent.*": [],
+          "huawei.*": [],
+        },
+        pushTarget: "internal",
+        authorizationKey: "provider-secret",
+      });
+      const replacePayload = JSON.parse(replaceResult.content[0].text);
+      assert.deepEqual(replacePayload.limits["aws.*"], ["sts"]);
+
+      const pushResult = await mcpServer._registeredTools.push_command_limits.handler({
+        pushTarget: "internal",
+        authorizationKey: "provider-secret",
+      });
+      const pushPayload = JSON.parse(pushResult.content[0].text);
+      assert.equal(pushPayload.target, "internal");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  } finally {
+    if (previousAuthKey === undefined) {
+      delete process.env.MCP_PROVIDER_AUTH_KEY;
+    } else {
+      process.env.MCP_PROVIDER_AUTH_KEY = previousAuthKey;
+    }
+  }
+});

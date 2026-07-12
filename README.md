@@ -49,13 +49,15 @@ Or pull and install all CLIs directly into the structure:
 npm run install:clis
 ```
 
-This installer covers all supported providers: AWS, GCP, Azure, OCI, Alibaba, DigitalOcean, IBM Cloud, Tencent Cloud, and Huawei Cloud.
+This installer covers AWS, GCP, Azure, OCI, Alibaba, DigitalOcean, IBM Cloud, and Tencent Cloud directly. Huawei Cloud is wired through the same provider interface, but the public `huaweicloudcli` Python package referenced by older installer versions is not available; set `HUAWEI_CLI_BIN` to a supported `hcloud`-compatible binary to enable Huawei command execution.
 
 At runtime, provider resolution order is:
 
 1. `mcp/<provider>/bin/<cli>` when present
 2. `<PROVIDER>_CLI_BIN` environment override
 3. CLI from `PATH`
+
+If neither `HUAWEI_CLI_BIN` nor `hcloud` on `PATH` is available during `npm run install:clis`, a placeholder `mcp/huawei/bin/hcloud` is created that fails with an explicit setup message instead of breaking the image build.
 
 Shared command limits live in [mcp/cloud-command-limits.json](/Users/lesterjohn/Documents/GitHub/cloud-mcp/mcp/cloud-command-limits.json).
 

@@ -18,12 +18,14 @@ RUN apt-get update \
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-COPY . .
-
-# Optional: install AWS, GCP, Azure, OCI, Alibaba, DigitalOcean, IBM Cloud, Tencent Cloud,
-# and Huawei Cloud CLIs into mcp/<provider>/bin.
+# Optional: install AWS, GCP, Azure, OCI, Alibaba, DigitalOcean, IBM Cloud, and
+# Tencent Cloud CLIs into mcp/<provider>/bin. Huawei links HUAWEI_CLI_BIN or hcloud
+# from PATH when available and otherwise creates an explicit setup placeholder.
 # This makes the image larger. For smaller images, omit this and mount/link CLIs at runtime.
+COPY scripts/install-clis.sh scripts/install-clis.sh
 RUN bash scripts/install-clis.sh
+
+COPY . .
 
 RUN chmod +x scripts/container-entrypoint.sh
 

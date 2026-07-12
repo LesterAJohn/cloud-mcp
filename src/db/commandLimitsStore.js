@@ -95,13 +95,15 @@ function createPostgresStore(databaseUrl, logger) {
           )
         `);
 
-        await client.query(`
-          INSERT INTO ${TABLE_NAME} (provider_prefix, allowed_prefixes, updated_at)
-          SELECT provider_prefix, allowed_prefixes, COALESCE(updated_at, NOW())
-          FROM public.command_limits
-          WHERE to_regclass('public.command_limits') IS NOT NULL
-          ON CONFLICT (provider_prefix) DO NOTHING
-        `);
+        const legacyTable = await client.query("SELECT to_regclass('public.command_limits') AS table_name");
+        if (legacyTable.rows[0]?.table_name) {
+          await client.query(`
+            INSERT INTO ${TABLE_NAME} (provider_prefix, allowed_prefixes, updated_at)
+            SELECT provider_prefix, allowed_prefixes, COALESCE(updated_at, NOW())
+            FROM public.command_limits
+            ON CONFLICT (provider_prefix) DO NOTHING
+          `);
+        }
 
         for (const providerPrefix of COMMAND_LIMIT_KEYS) {
           await client.query(

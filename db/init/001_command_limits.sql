@@ -6,11 +6,15 @@ CREATE TABLE IF NOT EXISTS cloud_mcp.command_limits (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-INSERT INTO cloud_mcp.command_limits (provider_prefix, allowed_prefixes, updated_at)
-SELECT provider_prefix, allowed_prefixes, COALESCE(updated_at, NOW())
-FROM public.command_limits
-WHERE to_regclass('public.command_limits') IS NOT NULL
-ON CONFLICT (provider_prefix) DO NOTHING;
+DO $$
+BEGIN
+  IF to_regclass('public.command_limits') IS NOT NULL THEN
+    INSERT INTO cloud_mcp.command_limits (provider_prefix, allowed_prefixes, updated_at)
+    SELECT provider_prefix, allowed_prefixes, COALESCE(updated_at, NOW())
+    FROM public.command_limits
+    ON CONFLICT (provider_prefix) DO NOTHING;
+  END IF;
+END $$;
 
 INSERT INTO cloud_mcp.command_limits (provider_prefix, allowed_prefixes)
 VALUES

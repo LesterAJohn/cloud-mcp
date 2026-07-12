@@ -11,7 +11,7 @@ OCI_CLI_VERSION="${OCI_CLI_VERSION:-3.68.0}"
 AZURE_CLI_VERSION="${AZURE_CLI_VERSION:-2.75.0}"
 DOCTL_VERSION="${DOCTL_VERSION:-1.119.0}"
 ALIYUN_CLI_VERSION="${ALIYUN_CLI_VERSION:-3.0.276}"
-TCCLI_VERSION="${TCCLI_VERSION:-3.0.1387}"
+TCCLI_VERSION="${TCCLI_VERSION:-3.0.1387.1}"
 HUAWEICLOUDCLI_VERSION="${HUAWEICLOUDCLI_VERSION:-3.1.94}"
 
 mkdir -p \
@@ -117,15 +117,31 @@ install_oci() {
 }
 
 install_alibaba() {
-  local venv_dir
-  venv_dir="$MCP_DIR/alibaba/venv"
+  local tmp_dir archive_arch url extracted_bin
+  tmp_dir="$(mktemp -d)"
 
-  echo "Installing Alibaba Cloud CLI ${ALIYUN_CLI_VERSION} into Python venv"
-  python3 -m venv "$venv_dir"
-  "$venv_dir/bin/pip" install --no-cache-dir --upgrade pip
-  "$venv_dir/bin/pip" install --no-cache-dir "aliyun-python-sdk-core>=2.16.0" "aliyun-cli==${ALIYUN_CLI_VERSION}"
+  if [[ "$ARCH_NORMALIZED" == "arm64" ]]; then
+    archive_arch="arm64"
+  else
+    archive_arch="amd64"
+  fi
 
-  ln -sf "$venv_dir/bin/aliyun" "$MCP_DIR/alibaba/bin/aliyun"
+  url="https://aliyuncli.alicdn.com/aliyun-cli-linux-${ALIYUN_CLI_VERSION}-${archive_arch}.tgz"
+  echo "Installing Alibaba Cloud CLI from $url"
+  curl -fsSL "$url" -o "$tmp_dir/aliyun.tgz"
+  tar -xzf "$tmp_dir/aliyun.tgz" -C "$tmp_dir"
+
+  extracted_bin="$(find "$tmp_dir" -type f -name aliyun -perm -u+x | head -n 1)"
+  if [[ -z "$extracted_bin" ]]; then
+    extracted_bin="$(find "$tmp_dir" -type f -name aliyun | head -n 1)"
+  fi
+  if [[ -z "$extracted_bin" ]]; then
+    echo "Failed to locate aliyun binary in Alibaba Cloud CLI archive" >&2
+    exit 1
+  fi
+
+  install -m 0755 "$extracted_bin" "$MCP_DIR/alibaba/bin/aliyun"
+  rm -rf "$tmp_dir"
 }
 
 install_digitalocean() {
@@ -179,21 +195,17 @@ install_tencent() {
 }
 
 install_huawei() {
-  local venv_dir
-  venv_dir="$MCP_DIR/huawei/venv"
-
-  echo "Installing Huawei Cloud CLI ${HUAWEICLOUDCLI_VERSION} into Python venv"
-  python3 -m venv "$venv_dir"
-  "$venv_dir/bin/pip" install --no-cache-dir --upgrade pip
-  "$venv_dir/bin/pip" install --no-cache-dir "huaweicloudcli==${HUAWEICLOUDCLI_VERSION}"
-
-  if [[ -x "$venv_dir/bin/hcloud" ]]; then
-    ln -sf "$venv_dir/bin/hcloud" "$MCP_DIR/huawei/bin/hcloud"
-  elif [[ -x "$venv_dir/bin/huaweicloud" ]]; then
-    ln -sf "$venv_dir/bin/huaweicloud" "$MCP_DIR/huawei/bin/hcloud"
+  if [[ -n "${HUAWEI_CLI_BIN:-}" && -x "$HUAWEI_CLI_BIN" ]]; then
+    ln -sf "$HUAWEI_CLI_BIN" "$MCP_DIR/huawei/bin/hcloud"
+  elif command -v hcloud >/dev/null 2>&1; then
+    ln -sf "$(command -v hcloud)" "$MCP_DIR/huawei/bin/hcloud"
   else
-    echo "Failed to locate hcloud-compatible binary after Huawei CLI install" >&2
-    exit 1
+    cat >"$MCP_DIR/huawei/bin/hcloud" <<'EOF'
+#!/usr/bin/env bash
+echo "Huawei Cloud CLI is not installed in this image. Set HUAWEI_CLI_BIN to a supported hcloud-compatible binary." >&2
+exit 127
+EOF
+    chmod +x "$MCP_DIR/huawei/bin/hcloud"
   fi
 }
 

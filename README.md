@@ -295,38 +295,11 @@ Provider vault authorization:
 - When configured, `set_command_limit_section`, `replace_command_limits`, and `push_command_limits` also require `authorizationKey`.
 - Requests with missing or invalid keys are rejected.
 
-## Single container setup
+## Container note
 
-This repository is set up to run as a single container image that includes:
+This repository no longer ships a first-party `Dockerfile`, so it does not provide a built-in container image build path.
 
-- Node.js runtime
-- cloud-mcp application
-- AWS, GCP, Azure, and OCI CLIs inside `mcp/<provider>/bin` (additional providers can be linked the same way)
-
-Build the image:
-
-```bash
-docker build -t cloud-mcp:local .
-```
-
-Run MCP mode (default):
-
-```bash
-docker run --rm -i cloud-mcp:local
-```
-
-Run direct CLI mode:
-
-```bash
-docker run --rm cloud-mcp:local cli list
-docker run --rm cloud-mcp:local cli aws sts get-caller-identity
-```
-
-The container entrypoint supports:
-
-- `mcp` for `node src/mcp.js`
-- `cli` for `node src/index.js`
-- Any other first argument is treated as direct CLI arguments for backward compatibility
+If your deployment requires containers, provide your own image definition around the Node entrypoints (`node src/mcp.js` for MCP mode, `node src/index.js` for CLI mode) and any cloud CLIs you want available in that runtime.
 
 ## Configuration
 

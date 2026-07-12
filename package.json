@@ -13,7 +13,6 @@
     "mcp": "node src/mcp.js",
     "bootstrap:clis": "sh scripts/bootstrap-clis.sh",
     "install:clis": "bash scripts/install-clis.sh",
-    "docker:build": "docker build -t cloud-mcp:local .",
     "test": "node --test"
   },
   "keywords": [],

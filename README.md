@@ -57,6 +57,24 @@ At runtime, provider resolution order is:
 
 Shared command limits live in [mcp/cloud-command-limits.json](/Users/lesterjohn/Documents/GitHub/cloud-mcp/mcp/cloud-command-limits.json).
 
+Current repository default (`mcp/cloud-command-limits.json`) is permissive for all providers and intentionally includes CLI-style aliases for two sections:
+
+```json
+{
+  "alibaba.*": [],
+  "aws.*": [],
+  "az.*": [],
+  "digitalocean.*": [],
+  "gcloud.*": [],
+  "huawei.*": [],
+  "ibmcloud.*": [],
+  "oci.*": [],
+  "tencent.*": []
+}
+```
+
+At load time this is normalized to canonical provider sections, so `az.*` becomes `azure.*` and `gcloud.*` becomes `gcp.*` in the effective runtime policy.
+
 External command-limit loading:
 
 - `CLOUD_COMMAND_LIMITS_SOURCE` (optional): load command limits from an external source at startup.
@@ -108,7 +126,7 @@ Prefix naming note:
   - `doctl.*` maps to `digitalocean.*`
   - `tccli.*` maps to `tencent.*`
   - `hcloud.*` maps to `huawei.*`
-- If both canonical and alias keys are provided for the same provider, canonical keys win (`gcp.*` over `gcloud.*`, `azure.*` over `az.*`).
+- If both canonical and alias keys are provided for the same provider, canonical keys win (`gcp.*` over `gcloud.*`, `azure.*` over `az.*`, `alibaba.*` over `aliyun.*`, `digitalocean.*` over `doctl.*`, `tencent.*` over `tccli.*`, `huawei.*` over `hcloud.*`).
 - Recommended mapping is:
   - `aws.*` for `aws`
   - `gcp.*` for `gcloud`

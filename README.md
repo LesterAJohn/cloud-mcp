@@ -49,6 +49,8 @@ Or pull and install all CLIs directly into the structure:
 npm run install:clis
 ```
 
+This installer covers all supported providers: AWS, GCP, Azure, OCI, Alibaba, DigitalOcean, IBM Cloud, Tencent Cloud, and Huawei Cloud.
+
 At runtime, provider resolution order is:
 
 1. `mcp/<provider>/bin/<cli>` when present

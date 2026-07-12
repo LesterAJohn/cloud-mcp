@@ -20,7 +20,8 @@ RUN npm ci --omit=dev
 
 COPY . .
 
-# Optional: install AWS, GCP, Azure, and OCI CLIs into mcp/<provider>/bin.
+# Optional: install AWS, GCP, Azure, OCI, Alibaba, DigitalOcean, IBM Cloud, Tencent Cloud,
+# and Huawei Cloud CLIs into mcp/<provider>/bin.
 # This makes the image larger. For smaller images, omit this and mount/link CLIs at runtime.
 RUN bash scripts/install-clis.sh
 

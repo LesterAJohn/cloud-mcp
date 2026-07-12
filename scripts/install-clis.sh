@@ -9,8 +9,21 @@ AWS_CLI_VERSION="${AWS_CLI_VERSION:-2.28.2}"
 GCLOUD_VERSION="${GCLOUD_VERSION:-486.0.0}"
 OCI_CLI_VERSION="${OCI_CLI_VERSION:-3.68.0}"
 AZURE_CLI_VERSION="${AZURE_CLI_VERSION:-2.75.0}"
+DOCTL_VERSION="${DOCTL_VERSION:-1.119.0}"
+ALIYUN_CLI_VERSION="${ALIYUN_CLI_VERSION:-3.0.276}"
+TCCLI_VERSION="${TCCLI_VERSION:-3.0.1387}"
+HUAWEICLOUDCLI_VERSION="${HUAWEICLOUDCLI_VERSION:-3.1.94}"
 
-mkdir -p "$MCP_DIR/aws/bin" "$MCP_DIR/gcp/bin" "$MCP_DIR/azure/bin" "$MCP_DIR/oci/bin"
+mkdir -p \
+  "$MCP_DIR/aws/bin" \
+  "$MCP_DIR/gcp/bin" \
+  "$MCP_DIR/azure/bin" \
+  "$MCP_DIR/oci/bin" \
+  "$MCP_DIR/alibaba/bin" \
+  "$MCP_DIR/digitalocean/bin" \
+  "$MCP_DIR/ibmcloud/bin" \
+  "$MCP_DIR/tencent/bin" \
+  "$MCP_DIR/huawei/bin"
 
 normalize_arch() {
   case "$1" in
@@ -103,12 +116,98 @@ install_oci() {
   rm -rf "$tmp_dir"
 }
 
+install_alibaba() {
+  local venv_dir
+  venv_dir="$MCP_DIR/alibaba/venv"
+
+  echo "Installing Alibaba Cloud CLI ${ALIYUN_CLI_VERSION} into Python venv"
+  python3 -m venv "$venv_dir"
+  "$venv_dir/bin/pip" install --no-cache-dir --upgrade pip
+  "$venv_dir/bin/pip" install --no-cache-dir "aliyun-python-sdk-core>=2.16.0" "aliyun-cli==${ALIYUN_CLI_VERSION}"
+
+  ln -sf "$venv_dir/bin/aliyun" "$MCP_DIR/alibaba/bin/aliyun"
+}
+
+install_digitalocean() {
+  local tmp_dir archive_name url
+  tmp_dir="$(mktemp -d)"
+
+  if [[ "$ARCH_NORMALIZED" == "arm64" ]]; then
+    archive_name="doctl-${DOCTL_VERSION}-linux-arm64.tar.gz"
+  else
+    archive_name="doctl-${DOCTL_VERSION}-linux-amd64.tar.gz"
+  fi
+
+  url="https://github.com/digitalocean/doctl/releases/download/v${DOCTL_VERSION}/${archive_name}"
+  echo "Installing DigitalOcean doctl from $url"
+  curl -fsSL "$url" -o "$tmp_dir/doctl.tar.gz"
+  tar -xzf "$tmp_dir/doctl.tar.gz" -C "$tmp_dir"
+
+  install -m 0755 "$tmp_dir/doctl" "$MCP_DIR/digitalocean/bin/doctl"
+  rm -rf "$tmp_dir"
+}
+
+install_ibmcloud() {
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+
+  echo "Installing IBM Cloud CLI"
+  curl -fsSL https://clis.cloud.ibm.com/install/linux | bash -s -- -y -d "$tmp_dir/ibmcloud"
+
+  if [[ -x "$tmp_dir/ibmcloud/bin/ibmcloud" ]]; then
+    ln -sf "$tmp_dir/ibmcloud/bin/ibmcloud" "$MCP_DIR/ibmcloud/bin/ibmcloud"
+  elif command -v ibmcloud >/dev/null 2>&1; then
+    ln -sf "$(command -v ibmcloud)" "$MCP_DIR/ibmcloud/bin/ibmcloud"
+  else
+    echo "Failed to locate ibmcloud binary after install" >&2
+    exit 1
+  fi
+
+  rm -rf "$tmp_dir"
+}
+
+install_tencent() {
+  local venv_dir
+  venv_dir="$MCP_DIR/tencent/venv"
+
+  echo "Installing Tencent Cloud CLI ${TCCLI_VERSION} into Python venv"
+  python3 -m venv "$venv_dir"
+  "$venv_dir/bin/pip" install --no-cache-dir --upgrade pip
+  "$venv_dir/bin/pip" install --no-cache-dir "tccli==${TCCLI_VERSION}"
+
+  ln -sf "$venv_dir/bin/tccli" "$MCP_DIR/tencent/bin/tccli"
+}
+
+install_huawei() {
+  local venv_dir
+  venv_dir="$MCP_DIR/huawei/venv"
+
+  echo "Installing Huawei Cloud CLI ${HUAWEICLOUDCLI_VERSION} into Python venv"
+  python3 -m venv "$venv_dir"
+  "$venv_dir/bin/pip" install --no-cache-dir --upgrade pip
+  "$venv_dir/bin/pip" install --no-cache-dir "huaweicloudcli==${HUAWEICLOUDCLI_VERSION}"
+
+  if [[ -x "$venv_dir/bin/hcloud" ]]; then
+    ln -sf "$venv_dir/bin/hcloud" "$MCP_DIR/huawei/bin/hcloud"
+  elif [[ -x "$venv_dir/bin/huaweicloud" ]]; then
+    ln -sf "$venv_dir/bin/huaweicloud" "$MCP_DIR/huawei/bin/hcloud"
+  else
+    echo "Failed to locate hcloud-compatible binary after Huawei CLI install" >&2
+    exit 1
+  fi
+}
+
 print_versions() {
   echo "Installed binary checks:"
   "$MCP_DIR/aws/bin/aws" --version || true
   "$MCP_DIR/gcp/bin/gcloud" --version || true
   "$MCP_DIR/azure/bin/az" version || true
   "$MCP_DIR/oci/bin/oci" --version || true
+  "$MCP_DIR/alibaba/bin/aliyun" --version || true
+  "$MCP_DIR/digitalocean/bin/doctl" version || true
+  "$MCP_DIR/ibmcloud/bin/ibmcloud" --version || true
+  "$MCP_DIR/tencent/bin/tccli" --version || true
+  "$MCP_DIR/huawei/bin/hcloud" --version || true
 }
 
 require_tools
@@ -116,6 +215,11 @@ install_aws
 install_gcloud
 install_azure
 install_oci
+install_alibaba
+install_digitalocean
+install_ibmcloud
+install_tencent
+install_huawei
 print_versions
 
 echo "All provider CLIs were installed into mcp/<provider>/bin"

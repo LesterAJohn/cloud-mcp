@@ -144,7 +144,7 @@ export function createLocalVault(initialState = {}) {
   return createVaultInterface(store);
 }
 
-async function tryCreateExternalVault({ initialState, moduleSpecifier, options, logger }) {
+async function tryCreateExternalVault({ initialState, moduleSpecifier, options, logger, failOnError = false }) {
   if (!moduleSpecifier) {
     return null;
   }
@@ -157,29 +157,48 @@ async function tryCreateExternalVault({ initialState, moduleSpecifier, options, 
     const module = await import(resolvedModuleSpecifier);
     const factory = module.createVault ?? module.default ?? module.vault;
 
+    if (!factory) {
+      throw new Error(`External vault module '${moduleSpecifier}' does not export createVault/default/vault`);
+    }
+
     if (typeof factory === "function") {
       const vault = await factory({ initialState, options, logger });
       if (vault) {
         return vault;
       }
+
+      throw new Error(`External vault factory '${moduleSpecifier}' returned an empty vault instance`);
     }
 
     if (factory && typeof factory === "object") {
       return factory;
     }
+
+    throw new Error(`External vault export from '${moduleSpecifier}' is neither a factory function nor vault object`);
   } catch (error) {
+    if (failOnError) {
+      throw error;
+    }
+
     logger?.debug?.({ error, moduleSpecifier }, "external vault unavailable, using local vault");
   }
 
   return null;
 }
 
-export async function createVaultService({ initialState = {}, moduleSpecifier, options = {}, logger } = {}) {
+export async function createVaultService({
+  initialState = {},
+  moduleSpecifier,
+  options = {},
+  logger,
+  failOnExternalVaultError = false,
+} = {}) {
   const externalVault = await tryCreateExternalVault({
     initialState,
     moduleSpecifier,
     options,
     logger,
+    failOnError: failOnExternalVaultError,
   });
 
   if (externalVault) {

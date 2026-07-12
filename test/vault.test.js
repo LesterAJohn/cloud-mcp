@@ -274,3 +274,50 @@ test("auto-selects built-in external vault module from VAULT_PROVIDER", async ()
     }
   }
 });
+
+test("fails closed when external vault is explicitly configured", async () => {
+  const previousModule = process.env.CLOUD_WRAP_VAULT_MODULE;
+  const previousProvider = process.env.VAULT_PROVIDER;
+  const previousAddr = process.env.VAULT_ADDR;
+  const previousToken = process.env.VAULT_TOKEN;
+
+  process.env.CLOUD_WRAP_VAULT_MODULE = "./does-not-exist.js";
+  process.env.VAULT_PROVIDER = "external";
+  process.env.VAULT_ADDR = "http://vault.mock:8200";
+  process.env.VAULT_TOKEN = "mock-token";
+
+  try {
+    await assert.rejects(
+      async () =>
+        createExecutionContext({
+          config: "cloud-wrap.config.example.json",
+          logLevel: "silent",
+        }),
+      /does-not-exist/,
+    );
+  } finally {
+    if (previousModule === undefined) {
+      delete process.env.CLOUD_WRAP_VAULT_MODULE;
+    } else {
+      process.env.CLOUD_WRAP_VAULT_MODULE = previousModule;
+    }
+
+    if (previousProvider === undefined) {
+      delete process.env.VAULT_PROVIDER;
+    } else {
+      process.env.VAULT_PROVIDER = previousProvider;
+    }
+
+    if (previousAddr === undefined) {
+      delete process.env.VAULT_ADDR;
+    } else {
+      process.env.VAULT_ADDR = previousAddr;
+    }
+
+    if (previousToken === undefined) {
+      delete process.env.VAULT_TOKEN;
+    } else {
+      process.env.VAULT_TOKEN = previousToken;
+    }
+  }
+});

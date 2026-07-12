@@ -155,6 +155,8 @@ This repo also includes a built-in external HashiCorp Vault adapter at `src/core
 - `VAULT_PROVIDER=external`
 - both `VAULT_ADDR` and `VAULT_TOKEN` are set
 
+Fail-closed behavior: when `VAULT_PROVIDER=external` and both `VAULT_ADDR` and `VAULT_TOKEN` are set, startup fails if the external vault module cannot be loaded or initialized. In this explicit external mode, it does not fall back to local in-memory vault.
+
 `CLOUD_WRAP_VAULT_MODULE` still takes precedence over all auto-selection logic.
 
 For external vault integrations, these environment variables are forwarded into the external vault `options` object when set:

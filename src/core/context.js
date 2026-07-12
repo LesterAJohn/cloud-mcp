@@ -59,6 +59,11 @@ function resolveVaultModuleSpecifier(configVaultModule) {
   return undefined;
 }
 
+function shouldFailClosedOnExternalVault() {
+  const provider = (process.env.VAULT_PROVIDER ?? "").toLowerCase();
+  return provider === "external" && Boolean(process.env.VAULT_ADDR) && Boolean(process.env.VAULT_TOKEN);
+}
+
 export async function createExecutionContext(options) {
   const config = await loadConfig(options.config);
   const logger = createLogger(options.logLevel, options.loggerDestination);
@@ -67,6 +72,7 @@ export async function createExecutionContext(options) {
     logger,
     moduleSpecifier: resolveVaultModuleSpecifier(config.vault?.module),
     options: buildVaultOptions(config.vault?.options ?? {}),
+    failOnExternalVaultError: shouldFailClosedOnExternalVault(),
   });
 
   return {

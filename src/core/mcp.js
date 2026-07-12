@@ -3,6 +3,13 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import * as z from "zod/v4";
 
 import { createExecutionContext } from "./context.js";
+import {
+  forcePushCommandLimits,
+  getCommandLimits,
+  getSupportedCommandLimitSections,
+  replaceCommandLimits,
+  setProviderCommandLimits,
+} from "./commandLimitsAdmin.js";
 import { runProviderCommand } from "./execute.js";
 
 const PROVIDER_AUTH_KEY_PATH = ["mcp", "authorization", "providerKey"];
@@ -119,6 +126,84 @@ function registerProviderTools(mcpServer, ctx, providerNames) {
   }
 }
 
+function registerCommandLimitsTools(mcpServer, ctx) {
+  const providerSectionEnum = getSupportedCommandLimitSections();
+
+  mcpServer.registerTool(
+    "get_command_limits",
+    {
+      description: "Get effective command limits currently stored in database",
+    },
+    async () => toTextContent(await getCommandLimits(ctx)),
+  );
+
+  mcpServer.registerTool(
+    "set_command_limit_section",
+    {
+      description: "Set one provider command-limit section in database and force-push cloud-command-limits JSON",
+      inputSchema: {
+        provider: z
+          .enum(["aws", "aws.*", "gcp", "gcp.*", "gcloud", "gcloud.*", "azure", "azure.*", "az", "az.*", "oci", "oci.*"]) 
+          .describe("Provider section"),
+        allowedPrefixes: z.array(z.string()).default([]).describe("Allowed command prefixes for the section"),
+        pushTarget: z
+          .enum(["auto", "internal", "external"])
+          .default("auto")
+          .describe("Force-push target for cloud-command-limits JSON"),
+      },
+    },
+    async ({ provider, allowedPrefixes, pushTarget }) => {
+      const limits = await setProviderCommandLimits(ctx, provider, allowedPrefixes);
+      const pushed = await forcePushCommandLimits(ctx, pushTarget);
+      return toTextContent({
+        updatedSection: provider,
+        limits,
+        pushed,
+      });
+    },
+  );
+
+  mcpServer.registerTool(
+    "replace_command_limits",
+    {
+      description: "Replace all command-limit sections in database and force-push cloud-command-limits JSON",
+      inputSchema: {
+        commandLimits: z
+          .object({
+            "aws.*": z.array(z.string()).default([]),
+            "gcp.*": z.array(z.string()).default([]),
+            "azure.*": z.array(z.string()).default([]),
+            "oci.*": z.array(z.string()).default([]),
+          })
+          .describe("Full canonical command-limits payload"),
+        pushTarget: z
+          .enum(["auto", "internal", "external"])
+          .default("auto")
+          .describe("Force-push target for cloud-command-limits JSON"),
+      },
+    },
+    async ({ commandLimits, pushTarget }) => {
+      const limits = await replaceCommandLimits(ctx, commandLimits);
+      const pushed = await forcePushCommandLimits(ctx, pushTarget);
+      return toTextContent({ limits, pushed });
+    },
+  );
+
+  mcpServer.registerTool(
+    "push_command_limits",
+    {
+      description: "Force-push DB command limits to internal or external cloud-command-limits JSON",
+      inputSchema: {
+        pushTarget: z
+          .enum(["auto", "internal", "external"])
+          .default("auto")
+          .describe("Force-push target for cloud-command-limits JSON"),
+      },
+    },
+    async ({ pushTarget }) => toTextContent(await forcePushCommandLimits(ctx, pushTarget)),
+  );
+}
+
 export async function createCloudMcpServer(options = {}) {
   const ctx = await createExecutionContext({
     ...options,
@@ -139,6 +224,7 @@ export async function createCloudMcpServer(options = {}) {
   initializeProviderAuthorizationKey(ctx, options);
 
   registerProviderTools(mcpServer, ctx, providerNames);
+  registerCommandLimitsTools(mcpServer, ctx);
 
   return { ctx, mcpServer };
 }

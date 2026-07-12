@@ -15,7 +15,8 @@ export async function runProviderCommand({ provider, args, ctx, stdio = "inherit
     ...providerConfig.env,
   };
 
-  assertProviderCommandAllowed(provider, args, ctx.commandLimits);
+  const commandLimits = await ctx.commandLimitsStore.getAll();
+  assertProviderCommandAllowed(provider, args, commandLimits);
 
   ctx.logger.debug({ provider, command, args }, "spawning provider command");
 

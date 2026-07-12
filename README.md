@@ -51,10 +51,59 @@ At runtime, provider resolution order is:
 
 Shared command limits live in [mcp/cloud-command-limits.json](/Users/lesterjohn/Documents/GitHub/cloud-mcp/mcp/cloud-command-limits.json).
 
-- Sections are keyed by provider prefix: `aws.*`, `azure.*`, `gcp.*`, `oci.*`
+External command-limit loading:
+
+- `CLOUD_COMMAND_LIMITS_SOURCE` (optional): load command limits from an external source at startup.
+  - Supported values: file path, `file://` URL, `http://` URL, `https://` URL.
+- `CLOUD_COMMAND_LIMITS_REFRESH_INTERVAL_SECONDS` (optional): when `CLOUD_COMMAND_LIMITS_SOURCE` is set and this value is `> 0`, command limits are reloaded on that interval.
+- If refresh fails, the last successfully loaded limits remain active.
+
+PostgreSQL-backed command limits:
+
+- Command limits are persisted in PostgreSQL table `cloud_mcp.command_limits`.
+- Runtime command validation reads limits from the database before each provider command execution.
+- On startup, limits are loaded from `mcp/cloud-command-limits.json` (or `CLOUD_COMMAND_LIMITS_SOURCE`) and synced into PostgreSQL.
+- When refresh is enabled, each refresh cycle updates PostgreSQL records from the external source.
+
+Database environment variables:
+
+- `COMMAND_LIMITS_DATABASE_URL` (preferred), or
+- `DATABASE_URL`
+
+If neither database variable is set, command limits run in in-memory mode.
+
+Start local PostgreSQL from repository assets:
+
+```bash
+docker compose -f docker-compose.postgres.yml up -d
+export COMMAND_LIMITS_DATABASE_URL="postgres://cloud_mcp:cloud_mcp@127.0.0.1:5432/cloud_mcp"
+```
+
+Standalone migration for existing databases:
+
+```bash
+psql "$COMMAND_LIMITS_DATABASE_URL" -f db/migrations/002_command_limits_namespace_migration.sql
+```
+
+This migration creates `cloud_mcp.command_limits`, copies legacy rows from `public.command_limits` when present, and ensures default provider-prefix records exist.
+
+- Enforced sections are keyed by provider prefix: `aws.*`, `gcp.*`, `azure.*`, `oci.*`
 - If a section is an empty array, all commands for that provider are allowed
 - If a section contains entries, only matching prefixes are allowed
 - Entries may be written as full prefixes like `aws.s3` or shorthand like `s3` within the `aws.*` section
+
+Prefix naming note:
+
+- Runtime enforcement uses provider names (`aws`, `gcp`, `azure`, `oci`), not binary names.
+- CLI-style aliases are supported and normalized during load:
+  - `gcloud.*` maps to `gcp.*`
+  - `az.*` maps to `azure.*`
+- If both canonical and alias keys are provided for the same provider, canonical keys win (`gcp.*` over `gcloud.*`, `azure.*` over `az.*`).
+- Recommended mapping is:
+  - `aws.*` for `aws`
+  - `gcp.*` for `gcloud`
+  - `azure.*` for `az`
+  - `oci.*` for `oci`
 
 How to fill out the file:
 
@@ -63,8 +112,8 @@ How to fill out the file:
 ```json
 {
   "aws.*": [],
-  "azure.*": [],
   "gcp.*": [],
+  "azure.*": [],
   "oci.*": []
 }
 ```
@@ -74,8 +123,8 @@ How to fill out the file:
 ```json
 {
   "aws.*": ["s3", "sts.get-caller-identity"],
-  "azure.*": [],
   "gcp.*": ["projects", "compute.instances.list"],
+  "azure.*": [],
   "oci.*": []
 }
 ```
@@ -85,8 +134,8 @@ How to fill out the file:
 ```json
 {
   "aws.*": ["aws.s3", "aws.sts.get-caller-identity"],
-  "azure.*": [],
   "gcp.*": ["projects", "compute.instances.list"],
+  "azure.*": [],
   "oci.*": ["oci.iam"]
 }
 ```
@@ -96,8 +145,8 @@ How to fill out the file:
 ```json
 {
   "aws.*": ["ec2.describe-instances", "s3.ls"],
-  "azure.*": ["vm", "account.show"],
   "gcp.*": ["projects.list"],
+  "azure.*": ["vm", "account.show"],
   "oci.*": ["iam.region.list"]
 }
 ```
@@ -161,6 +210,23 @@ It registers these tools:
 - `run_gcp`
 - `run_azure`
 - `run_oci`
+- `get_command_limits`
+- `set_command_limit_section`
+- `replace_command_limits`
+- `push_command_limits`
+
+Command-limit MCP management:
+
+- `get_command_limits`: reads effective command limits from database.
+- `set_command_limit_section`: updates one provider section in database, then force-pushes to JSON target.
+- `replace_command_limits`: replaces all sections in database, then force-pushes to JSON target.
+- `push_command_limits`: force-pushes current DB limits to JSON target without modifying DB.
+
+Force-push target:
+
+- `pushTarget=internal`: writes to local `mcp/cloud-command-limits.json` (or configured internal path).
+- `pushTarget=external`: writes to `CLOUD_COMMAND_LIMITS_SOURCE`.
+- `pushTarget=auto`: uses external source when configured, otherwise internal file.
 
 Provider vault authorization:
 

@@ -1,0 +1,19 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: cloud-mcp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cloud_mcp
+      POSTGRES_USER: cloud_mcp
+      POSTGRES_PASSWORD: cloud_mcp
+    ports:
+      - "5432:5432"
+    volumes:
+      - cloud-mcp-postgres-data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+
+volumes:
+  cloud-mcp-postgres-data:

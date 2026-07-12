@@ -5,7 +5,7 @@ A Node.js skeleton for wrapping multiple cloud CLIs behind one command surface.
 ## What this gives you
 
 - Unified CLI entrypoint (`cloud-wrap`)
-- Provider pass-through commands for AWS, GCP, Azure, and OCI
+- Provider pass-through commands for AWS, GCP, Azure, OCI, Alibaba, DigitalOcean, IBM Cloud, Tencent Cloud, and Huawei Cloud
 - Config file support to override command paths and inject environment variables
 - Vault abstraction for storing provider attributes with optional external replacement
 - MCP stdio server that registers provider tools and command runners
@@ -19,6 +19,7 @@ npm run bootstrap:clis
 npm start -- list
 npm start -- aws sts get-caller-identity
 npm start -- oci iam region list
+npm start -- alibaba ecs DescribeInstances
 npm run mcp
 ```
 
@@ -30,6 +31,11 @@ This project can keep provider CLI entrypoints under `mcp/<provider>/bin`.
 - `mcp/gcp/bin/gcloud`
 - `mcp/azure/bin/az`
 - `mcp/oci/bin/oci`
+- `mcp/alibaba/bin/aliyun`
+- `mcp/digitalocean/bin/doctl`
+- `mcp/ibmcloud/bin/ibmcloud`
+- `mcp/tencent/bin/tccli`
+- `mcp/huawei/bin/hcloud`
 
 Run the bootstrap command to create links from your installed CLIs into this structure:
 
@@ -87,23 +93,32 @@ psql "$COMMAND_LIMITS_DATABASE_URL" -f db/migrations/002_command_limits_namespac
 
 This migration creates `cloud_mcp.command_limits`, copies legacy rows from `public.command_limits` when present, and ensures default provider-prefix records exist.
 
-- Enforced sections are keyed by provider prefix: `aws.*`, `gcp.*`, `azure.*`, `oci.*`
+- Enforced sections are keyed by provider prefix: `aws.*`, `gcp.*`, `azure.*`, `oci.*`, `alibaba.*`, `digitalocean.*`, `ibmcloud.*`, `tencent.*`, `huawei.*`
 - If a section is an empty array, all commands for that provider are allowed
 - If a section contains entries, only matching prefixes are allowed
 - Entries may be written as full prefixes like `aws.s3` or shorthand like `s3` within the `aws.*` section
 
 Prefix naming note:
 
-- Runtime enforcement uses provider names (`aws`, `gcp`, `azure`, `oci`), not binary names.
+- Runtime enforcement uses provider names (`aws`, `gcp`, `azure`, `oci`, `alibaba`, `digitalocean`, `ibmcloud`, `tencent`, `huawei`), not binary names.
 - CLI-style aliases are supported and normalized during load:
   - `gcloud.*` maps to `gcp.*`
   - `az.*` maps to `azure.*`
+  - `aliyun.*` maps to `alibaba.*`
+  - `doctl.*` maps to `digitalocean.*`
+  - `tccli.*` maps to `tencent.*`
+  - `hcloud.*` maps to `huawei.*`
 - If both canonical and alias keys are provided for the same provider, canonical keys win (`gcp.*` over `gcloud.*`, `azure.*` over `az.*`).
 - Recommended mapping is:
   - `aws.*` for `aws`
   - `gcp.*` for `gcloud`
   - `azure.*` for `az`
   - `oci.*` for `oci`
+  - `alibaba.*` for `aliyun`
+  - `digitalocean.*` for `doctl`
+  - `ibmcloud.*` for `ibmcloud`
+  - `tencent.*` for `tccli`
+  - `huawei.*` for `hcloud`
 
 How to fill out the file:
 
@@ -111,10 +126,15 @@ How to fill out the file:
 
 ```json
 {
+  "alibaba.*": [],
   "aws.*": [],
+  "digitalocean.*": [],
   "gcp.*": [],
   "azure.*": [],
-  "oci.*": []
+  "oci.*": [],
+  "ibmcloud.*": [],
+  "tencent.*": [],
+  "huawei.*": []
 }
 ```
 
@@ -122,10 +142,15 @@ How to fill out the file:
 
 ```json
 {
+  "alibaba.*": ["ecs"],
   "aws.*": ["s3", "sts.get-caller-identity"],
   "gcp.*": ["projects", "compute.instances.list"],
   "azure.*": [],
-  "oci.*": []
+  "oci.*": [],
+  "digitalocean.*": ["compute"],
+  "ibmcloud.*": [],
+  "tencent.*": ["cvm"],
+  "huawei.*": ["ecs"]
 }
 ```
 
@@ -181,6 +206,7 @@ npm start -- run aws s3 ls
 npm start -- run gcp projects list
 npm start -- run azure account show
 npm start -- run oci iam region list
+npm start -- run digitalocean compute droplet list
 ```
 
 ### Provider shorthands
@@ -190,6 +216,7 @@ npm start -- aws s3 ls
 npm start -- gcp projects list
 npm start -- azure account show
 npm start -- oci iam region list
+npm start -- tencent cvm DescribeInstances
 ```
 
 ## MCP server
@@ -210,6 +237,11 @@ It registers these tools:
 - `run_gcp`
 - `run_azure`
 - `run_oci`
+- `run_alibaba`
+- `run_digitalocean`
+- `run_ibmcloud`
+- `run_tencent`
+- `run_huawei`
 - `get_command_limits`
 - `set_command_limit_section`
 - `replace_command_limits`
@@ -240,7 +272,7 @@ This repository is set up to run as a single container image that includes:
 
 - Node.js runtime
 - cloud-mcp application
-- AWS, GCP, Azure, and OCI CLIs inside `mcp/<provider>/bin`
+- AWS, GCP, Azure, and OCI CLIs inside `mcp/<provider>/bin` (additional providers can be linked the same way)
 
 Build the image:
 
@@ -282,6 +314,18 @@ Create `cloud-wrap.config.json` using `cloud-wrap.config.example.json` as a temp
       "command": "aws",
       "env": {
         "AWS_PROFILE": "default"
+      },
+      "defaultProfile": "default",
+      "profileSupport": {
+        "mode": "env",
+        "envVar": "AWS_PROFILE"
+      },
+      "profiles": {
+        "default": {
+          "env": {
+            "AWS_PROFILE": "default"
+          }
+        }
       }
     }
   }
@@ -318,6 +362,7 @@ Required vault key contract:
 - Required secret key at each provider path:
   - key name: `provider`
   - required object fields: `command` (string), `env` (object)
+  - optional profile fields: `defaultProfile` (string), `profiles` (map), `profileSupport` (`mode=arg|env`, with `flag` or `envVar`)
 - Provider authorization key (when enabled):
   - set `MCP_PROVIDER_AUTH_KEY` to seed vault path `mcp.authorization.providerKey`
   - `get_provider` and `set_provider` requests must include `authorizationKey` matching that value
@@ -328,8 +373,20 @@ When using the built-in external adapter, `VAULT_SECRET_PATH` is treated as a ba
 - `${VAULT_SECRET_PATH}/gcp`
 - `${VAULT_SECRET_PATH}/azure`
 - `${VAULT_SECRET_PATH}/oci`
+- `${VAULT_SECRET_PATH}/alibaba`
+- `${VAULT_SECRET_PATH}/digitalocean`
+- `${VAULT_SECRET_PATH}/ibmcloud`
+- `${VAULT_SECRET_PATH}/tencent`
+- `${VAULT_SECRET_PATH}/huawei`
 
-Each provider secret stores one object at key `provider` containing `command` and `env`.
+Each provider secret stores one object at key `provider` containing `command`, `env`, and optional profile fields.
+
+Multi-profile provider behavior:
+
+- `run_provider` and `run_<provider>` accept optional `profile`.
+- If `profile` is provided, runtime applies `profileSupport` to inject profile context via args or env.
+- `profiles.<name>.args` and `profiles.<name>.env` are merged into execution.
+- If `profile` is omitted and `defaultProfile` is configured, that profile is used.
 
 `CLOUD_WRAP_VAULT_MODULE` can also be used to override `vault.module` from config.
 

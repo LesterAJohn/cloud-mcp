@@ -2,7 +2,7 @@ import { Command } from "commander";
 import { createExecutionContext } from "./core/context.js";
 import { runProviderCommand } from "./core/execute.js";
 
-const KNOWN_PROVIDERS = ["aws", "gcp", "azure", "oci"];
+const KNOWN_PROVIDERS = ["aws", "gcp", "azure", "oci", "alibaba", "digitalocean", "ibmcloud", "tencent", "huawei"];
 
 export function buildProgram() {
   const program = new Command();
@@ -28,14 +28,16 @@ export function buildProgram() {
   program
     .command("run")
     .description("run a provider CLI command")
-    .argument("<provider>", "provider key, e.g. aws|gcp|azure|oci")
+    .argument("<provider>", "provider key, e.g. aws|gcp|azure|oci|alibaba|digitalocean|ibmcloud|tencent|huawei")
     .argument("[args...]", "arguments passed through to provider CLI")
+    .option("--profile <name>", "optional provider profile/context name")
     .allowUnknownOption(true)
-    .action(async (provider, args = []) => {
+    .action(async (provider, args = [], command) => {
       const ctx = await createExecutionContext(program.opts());
       await runProviderCommand({
         provider,
         args,
+        profile: command.profile,
         ctx,
       });
     });
@@ -45,12 +47,14 @@ export function buildProgram() {
       .command(provider)
       .description(`shorthand for 'run ${provider} ...'`)
       .argument("[args...]", `arguments passed through to ${provider}`)
+      .option("--profile <name>", "optional provider profile/context name")
       .allowUnknownOption(true)
-      .action(async (args = []) => {
+      .action(async (args = [], command) => {
         const ctx = await createExecutionContext(program.opts());
         await runProviderCommand({
           provider,
           args,
+          profile: command.profile,
           ctx,
         });
       });

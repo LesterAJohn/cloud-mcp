@@ -7,14 +7,37 @@
     "aws": {
       "command": "aws",
       "env": {
-        "AWS_PROFILE": "default",
         "AWS_REGION": "us-east-1"
+      },
+      "defaultProfile": "default",
+      "profileSupport": {
+        "mode": "env",
+        "envVar": "AWS_PROFILE"
+      },
+      "profiles": {
+        "default": {
+          "env": {
+            "AWS_PROFILE": "default"
+          }
+        }
       }
     },
     "gcp": {
       "command": "gcloud",
       "env": {
         "CLOUDSDK_CORE_PROJECT": "my-project"
+      },
+      "defaultProfile": "default",
+      "profileSupport": {
+        "mode": "env",
+        "envVar": "CLOUDSDK_ACTIVE_CONFIG_NAME"
+      },
+      "profiles": {
+        "default": {
+          "env": {
+            "CLOUDSDK_ACTIVE_CONFIG_NAME": "default"
+          }
+        }
       }
     },
     "azure": {
@@ -26,8 +49,57 @@
     "oci": {
       "command": "oci",
       "env": {
-        "OCI_CLI_PROFILE": "DEFAULT"
+        "OCI_CLI_CONFIG_FILE": "/home/user/.oci/config"
+      },
+      "defaultProfile": "DEFAULT",
+      "profileSupport": {
+        "mode": "env",
+        "envVar": "OCI_CLI_PROFILE"
+      },
+      "profiles": {
+        "DEFAULT": {
+          "env": {
+            "OCI_CLI_PROFILE": "DEFAULT"
+          }
+        }
       }
+    },
+    "alibaba": {
+      "command": "aliyun",
+      "env": {},
+      "profileSupport": {
+        "mode": "arg",
+        "flag": "--profile"
+      },
+      "profiles": {
+        "prod": {
+          "args": ["--region", "cn-hangzhou"]
+        }
+      }
+    },
+    "digitalocean": {
+      "command": "doctl",
+      "env": {},
+      "profileSupport": {
+        "mode": "arg",
+        "flag": "--context"
+      }
+    },
+    "ibmcloud": {
+      "command": "ibmcloud",
+      "env": {}
+    },
+    "tencent": {
+      "command": "tccli",
+      "env": {},
+      "profileSupport": {
+        "mode": "arg",
+        "flag": "--profile"
+      }
+    },
+    "huawei": {
+      "command": "hcloud",
+      "env": {}
     }
   }
 }

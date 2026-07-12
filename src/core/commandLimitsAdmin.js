@@ -2,7 +2,17 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const CANONICAL_SECTIONS = ["aws.*", "gcp.*", "azure.*", "oci.*"];
+const CANONICAL_SECTIONS = [
+  "aws.*",
+  "gcp.*",
+  "azure.*",
+  "oci.*",
+  "alibaba.*",
+  "digitalocean.*",
+  "ibmcloud.*",
+  "tencent.*",
+  "huawei.*",
+];
 
 function normalizeProviderSection(provider) {
   const raw = String(provider ?? "").trim().toLowerCase();
@@ -22,6 +32,26 @@ function normalizeProviderSection(provider) {
     return "oci.*";
   }
 
+  if (raw === "alibaba" || raw === "alibaba.*" || raw === "aliyun" || raw === "aliyun.*") {
+    return "alibaba.*";
+  }
+
+  if (raw === "digitalocean" || raw === "digitalocean.*" || raw === "doctl" || raw === "doctl.*") {
+    return "digitalocean.*";
+  }
+
+  if (raw === "ibmcloud" || raw === "ibmcloud.*") {
+    return "ibmcloud.*";
+  }
+
+  if (raw === "tencent" || raw === "tencent.*" || raw === "tccli" || raw === "tccli.*") {
+    return "tencent.*";
+  }
+
+  if (raw === "huawei" || raw === "huawei.*" || raw === "hcloud" || raw === "hcloud.*") {
+    return "huawei.*";
+  }
+
   throw new Error(`Unsupported provider section '${provider}'`);
 }
 
@@ -31,6 +61,11 @@ function normalizeLimits(limits) {
     "gcp.*": Array.isArray(limits?.["gcp.*"]) ? limits["gcp.*"] : [],
     "azure.*": Array.isArray(limits?.["azure.*"]) ? limits["azure.*"] : [],
     "oci.*": Array.isArray(limits?.["oci.*"]) ? limits["oci.*"] : [],
+    "alibaba.*": Array.isArray(limits?.["alibaba.*"]) ? limits["alibaba.*"] : [],
+    "digitalocean.*": Array.isArray(limits?.["digitalocean.*"]) ? limits["digitalocean.*"] : [],
+    "ibmcloud.*": Array.isArray(limits?.["ibmcloud.*"]) ? limits["ibmcloud.*"] : [],
+    "tencent.*": Array.isArray(limits?.["tencent.*"]) ? limits["tencent.*"] : [],
+    "huawei.*": Array.isArray(limits?.["huawei.*"]) ? limits["huawei.*"] : [],
   };
 }
 

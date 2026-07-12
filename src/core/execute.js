@@ -1,7 +1,48 @@
 import { execa } from "execa";
 import { assertProviderCommandAllowed } from "./commandLimits.js";
 
-export async function runProviderCommand({ provider, args, ctx, stdio = "inherit" }) {
+function resolveProviderExecution(providerConfig, requestedArgs, selectedProfile) {
+  const args = Array.isArray(requestedArgs) ? [...requestedArgs] : [];
+  const profile = selectedProfile ?? providerConfig.defaultProfile;
+  const profiles = providerConfig.profiles ?? {};
+  const profileConfig = profile ? profiles[profile] : undefined;
+
+  const env = {
+    ...(providerConfig.env ?? {}),
+    ...(profileConfig?.env ?? {}),
+  };
+
+  let finalArgs = [...(Array.isArray(profileConfig?.args) ? profileConfig.args : []), ...args];
+
+  if (profile) {
+    const profileSupport = providerConfig.profileSupport;
+    if (!profileSupport) {
+      throw new Error(`Provider does not define profileSupport, but profile '${profile}' was requested`);
+    }
+
+    if (profileSupport.mode === "arg") {
+      const flag = profileSupport.flag ?? "--profile";
+      finalArgs = [flag, profile, ...finalArgs];
+    }
+
+    if (profileSupport.mode === "env") {
+      const envVar = profileSupport.envVar;
+      if (!envVar) {
+        throw new Error("Provider profileSupport mode 'env' requires envVar");
+      }
+
+      env[envVar] = profile;
+    }
+  }
+
+  return {
+    env,
+    finalArgs,
+    profile,
+  };
+}
+
+export async function runProviderCommand({ provider, args, profile, ctx, stdio = "inherit" }) {
   const providerConfig = ctx.vault.get(["providers", provider], ctx.providers[provider]);
 
   if (!providerConfig) {
@@ -10,18 +51,19 @@ export async function runProviderCommand({ provider, args, ctx, stdio = "inherit
   }
 
   const command = providerConfig.command;
+  const execution = resolveProviderExecution(providerConfig, args, profile);
   const mergedEnv = {
     ...process.env,
-    ...providerConfig.env,
+    ...execution.env,
   };
 
   const commandLimits = await ctx.commandLimitsStore.getAll();
-  assertProviderCommandAllowed(provider, args, commandLimits);
+  assertProviderCommandAllowed(provider, execution.finalArgs, commandLimits);
 
-  ctx.logger.debug({ provider, command, args }, "spawning provider command");
+  ctx.logger.debug({ provider, command, args: execution.finalArgs, profile: execution.profile }, "spawning provider command");
 
   if (stdio === "inherit") {
-    await execa(command, args, {
+    await execa(command, execution.finalArgs, {
       env: mergedEnv,
       stdio: "inherit",
       preferLocal: false,
@@ -30,7 +72,7 @@ export async function runProviderCommand({ provider, args, ctx, stdio = "inherit
     return null;
   }
 
-  const result = await execa(command, args, {
+  const result = await execa(command, execution.finalArgs, {
     env: mergedEnv,
     preferLocal: false,
     reject: false,

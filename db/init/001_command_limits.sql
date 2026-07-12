@@ -17,5 +17,10 @@ VALUES
   ('aws.*', '[]'::jsonb),
   ('gcp.*', '[]'::jsonb),
   ('azure.*', '[]'::jsonb),
-  ('oci.*', '[]'::jsonb)
+  ('oci.*', '[]'::jsonb),
+  ('alibaba.*', '[]'::jsonb),
+  ('digitalocean.*', '[]'::jsonb),
+  ('ibmcloud.*', '[]'::jsonb),
+  ('tencent.*', '[]'::jsonb),
+  ('huawei.*', '[]'::jsonb)
 ON CONFLICT (provider_prefix) DO NOTHING;

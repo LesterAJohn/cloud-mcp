@@ -10,10 +10,15 @@ import { assertProviderCommandAllowed, isProviderCommandAllowed } from "../src/c
 
 test("empty command limit section allows all commands", () => {
   const commandLimits = {
+    "alibaba.*": [],
     "aws.*": [],
     "azure.*": [],
+    "digitalocean.*": [],
     "gcp.*": [],
+    "huawei.*": [],
+    "ibmcloud.*": [],
     "oci.*": [],
+    "tencent.*": [],
   };
 
   assert.equal(isProviderCommandAllowed("aws", ["ec2", "describe-instances"], commandLimits), true);
@@ -22,10 +27,15 @@ test("empty command limit section allows all commands", () => {
 
 test("command limits allow only matching provider-prefixed commands", () => {
   const commandLimits = {
+    "alibaba.*": ["ecs"],
     "aws.*": ["aws.s3", "sts.get-caller-identity"],
     "azure.*": [],
+    "digitalocean.*": ["compute"],
     "gcp.*": ["projects"],
+    "huawei.*": ["ecs"],
+    "ibmcloud.*": ["resource"],
     "oci.*": ["oci.iam"],
+    "tencent.*": ["cvm"],
   };
 
   assert.equal(isProviderCommandAllowed("aws", ["s3", "ls"], commandLimits), true);
@@ -37,10 +47,15 @@ test("command limits allow only matching provider-prefixed commands", () => {
 
 test("assertProviderCommandAllowed throws on denied command", () => {
   const commandLimits = {
+    "alibaba.*": [],
     "aws.*": ["aws.s3"],
     "azure.*": [],
+    "digitalocean.*": [],
     "gcp.*": [],
+    "huawei.*": [],
+    "ibmcloud.*": [],
     "oci.*": [],
+    "tencent.*": [],
   };
 
   assert.throws(
@@ -56,8 +71,13 @@ test("loadCommandLimits merges defaults with JSON file", async () => {
   await writeFile(
     filePath,
     JSON.stringify({
+      "alibaba.*": [],
       "aws.*": ["aws.s3"],
+      "digitalocean.*": [],
       "gcp.*": ["projects"],
+      "huawei.*": [],
+      "ibmcloud.*": [],
+      "tencent.*": [],
     }),
     "utf8",
   );
@@ -65,10 +85,15 @@ test("loadCommandLimits merges defaults with JSON file", async () => {
   const loaded = await loadCommandLimits(filePath);
 
   assert.deepEqual(loaded, {
+    "alibaba.*": [],
     "aws.*": ["aws.s3"],
     "azure.*": [],
+    "digitalocean.*": [],
     "gcp.*": ["projects"],
+    "huawei.*": [],
+    "ibmcloud.*": [],
     "oci.*": [],
+    "tencent.*": [],
   });
 });
 
@@ -79,9 +104,14 @@ test("loadCommandLimits maps az.* and gcloud.* aliases", async () => {
   await writeFile(
     filePath,
     JSON.stringify({
+      "aliyun.*": ["ecs.describe-instances"],
       "aws.*": ["s3"],
       "az.*": ["account.show"],
+      "doctl.*": ["compute"],
       "gcloud.*": ["projects.list"],
+      "tccli.*": ["cvm.DescribeInstances"],
+      "huawei.*": ["ecs list-servers"],
+      "ibmcloud.*": ["resource"],
       "oci.*": ["iam.region.list"],
     }),
     "utf8",
@@ -90,10 +120,15 @@ test("loadCommandLimits maps az.* and gcloud.* aliases", async () => {
   const loaded = await loadCommandLimits(filePath);
 
   assert.deepEqual(loaded, {
+    "alibaba.*": ["ecs.describe-instances"],
     "aws.*": ["s3"],
     "azure.*": ["account.show"],
+    "digitalocean.*": ["compute"],
     "gcp.*": ["projects.list"],
+    "huawei.*": ["ecs list-servers"],
+    "ibmcloud.*": ["resource"],
     "oci.*": ["iam.region.list"],
+    "tencent.*": ["cvm.DescribeInstances"],
   });
 
   assert.equal(isProviderCommandAllowed("azure", ["account", "show"], loaded), true);
@@ -109,9 +144,12 @@ test("loadCommandLimits supports commandLimitsSource file URL", async () => {
   await writeFile(
     filePath,
     JSON.stringify({
+      "aliyun.*": ["ecs.describe-instances"],
       "aws.*": ["s3"],
       "az.*": ["account.show"],
+      "doctl.*": ["compute"],
       "gcloud.*": ["projects.list"],
+      "tccli.*": ["cvm.DescribeInstances"],
       "oci.*": [],
     }),
     "utf8",
@@ -122,10 +160,15 @@ test("loadCommandLimits supports commandLimitsSource file URL", async () => {
   });
 
   assert.deepEqual(loaded, {
+    "alibaba.*": ["ecs.describe-instances"],
     "aws.*": ["s3"],
     "azure.*": ["account.show"],
+    "digitalocean.*": ["compute"],
     "gcp.*": ["projects.list"],
+    "huawei.*": [],
+    "ibmcloud.*": [],
     "oci.*": [],
+    "tencent.*": ["cvm.DescribeInstances"],
   });
 });
 
@@ -135,7 +178,9 @@ test("loadCommandLimits supports commandLimitsSource HTTP URL", async () => {
   globalThis.fetch = async () =>
     new Response(
       JSON.stringify({
+        "aliyun.*": ["ecs"],
         "aws.*": ["sts.get-caller-identity"],
+        "doctl.*": ["compute"],
         "gcloud.*": ["projects"],
       }),
       {
@@ -150,10 +195,15 @@ test("loadCommandLimits supports commandLimitsSource HTTP URL", async () => {
     });
 
     assert.deepEqual(loaded, {
+      "alibaba.*": ["ecs"],
       "aws.*": ["sts.get-caller-identity"],
       "azure.*": [],
+      "digitalocean.*": ["compute"],
       "gcp.*": ["projects"],
+      "huawei.*": [],
+      "ibmcloud.*": [],
       "oci.*": [],
+      "tencent.*": [],
     });
   } finally {
     globalThis.fetch = previousFetch;

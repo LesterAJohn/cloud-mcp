@@ -20,6 +20,11 @@ test("command limits store uses in-memory mode without database URL", async () =
       "gcp.*": ["projects"],
       "azure.*": [],
       "oci.*": ["iam"],
+      "alibaba.*": ["ecs"],
+      "digitalocean.*": [],
+      "ibmcloud.*": ["resource"],
+      "tencent.*": [],
+      "huawei.*": ["ecs"],
     });
 
     const loaded = await store.getAll();
@@ -28,6 +33,11 @@ test("command limits store uses in-memory mode without database URL", async () =
       "gcp.*": ["projects"],
       "azure.*": [],
       "oci.*": ["iam"],
+      "alibaba.*": ["ecs"],
+      "digitalocean.*": [],
+      "ibmcloud.*": ["resource"],
+      "tencent.*": [],
+      "huawei.*": ["ecs"],
     });
   } finally {
     if (previousCommandLimitsDb === undefined) {

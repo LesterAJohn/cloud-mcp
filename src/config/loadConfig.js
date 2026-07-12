@@ -9,6 +9,23 @@ dotenv.config({ quiet: true });
 const providerSchema = z.object({
   command: z.string().min(1),
   env: z.record(z.string(), z.string()).default({}),
+  defaultProfile: z.string().min(1).optional(),
+  profiles: z
+    .record(
+      z.string(),
+      z.object({
+        args: z.array(z.string()).default([]),
+        env: z.record(z.string(), z.string()).default({}),
+      }),
+    )
+    .default({}),
+  profileSupport: z
+    .object({
+      mode: z.enum(["arg", "env"]),
+      flag: z.string().min(1).optional(),
+      envVar: z.string().min(1).optional(),
+    })
+    .optional(),
 });
 
 const vaultSchema = z

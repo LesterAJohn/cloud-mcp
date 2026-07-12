@@ -20,15 +20,75 @@ test("mcp server registers provider commands", async () => {
       "list_providers",
       "push_command_limits",
       "replace_command_limits",
+      "run_alibaba",
       "run_aws",
       "run_azure",
+      "run_digitalocean",
       "run_gcp",
+      "run_huawei",
+      "run_ibmcloud",
       "run_oci",
       "run_provider",
+      "run_tencent",
       "set_command_limit_section",
       "set_provider",
     ],
   );
+});
+
+test("run_provider applies profile settings from provider config", async () => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "cloud-mcp-provider-profile-"));
+  const outputPath = path.join(tempDir, "profile-output.json");
+
+  try {
+    const { mcpServer } = await createCloudMcpServer({
+      config: "cloud-wrap.config.example.json",
+      logLevel: "silent",
+    });
+
+    const writerProgram = [
+      "const fs = require('node:fs');",
+      "const outPath = process.env.TEST_PROFILE_OUTPUT_PATH;",
+      "fs.writeFileSync(outPath, JSON.stringify({ args: process.argv.slice(1), env: { TEST_PROFILE_ENV: process.env.TEST_PROFILE_ENV || null, TEST_SELECTED_PROFILE: process.env.TEST_SELECTED_PROFILE || null } }));",
+    ].join("");
+
+    await mcpServer._registeredTools.set_provider.handler({
+      provider: "profiletest",
+      config: {
+        command: "node",
+        env: {
+          TEST_PROFILE_OUTPUT_PATH: outputPath,
+        },
+        profileSupport: {
+          mode: "env",
+          envVar: "TEST_SELECTED_PROFILE",
+        },
+        profiles: {
+          prod: {
+            args: ["-e", writerProgram],
+            env: {
+              TEST_PROFILE_ENV: "prod-profile",
+            },
+          },
+        },
+      },
+    });
+
+    await mcpServer._registeredTools.run_provider.handler({
+      provider: "profiletest",
+      profile: "prod",
+      args: ["resource", "list"],
+    });
+
+    const raw = await readFile(outputPath, "utf8");
+    const payload = JSON.parse(raw);
+
+    assert.deepEqual(payload.args, ["resource", "list"]);
+    assert.equal(payload.env.TEST_PROFILE_ENV, "prod-profile");
+    assert.equal(payload.env.TEST_SELECTED_PROFILE, "prod");
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
 });
 
 test("set_command_limit_section updates DB limits and force-pushes to internal file", async () => {

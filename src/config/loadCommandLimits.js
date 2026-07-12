@@ -5,19 +5,33 @@ import { z } from "zod";
 const DEFAULT_COMMAND_LIMITS_PATH = "mcp/cloud-command-limits.json";
 
 export const DEFAULT_COMMAND_LIMITS = {
+  "alibaba.*": [],
   "aws.*": [],
   "azure.*": [],
+  "digitalocean.*": [],
   "gcp.*": [],
+  "huawei.*": [],
+  "ibmcloud.*": [],
   "oci.*": [],
+  "tencent.*": [],
 };
 
 const commandLimitsSchema = z.object({
+  "alibaba.*": z.array(z.string()).optional(),
   "aws.*": z.array(z.string()).optional(),
   "azure.*": z.array(z.string()).optional(),
+  "digitalocean.*": z.array(z.string()).optional(),
   "gcp.*": z.array(z.string()).optional(),
+  "hcloud.*": z.array(z.string()).optional(),
+  "huawei.*": z.array(z.string()).optional(),
+  "ibmcloud.*": z.array(z.string()).optional(),
   "oci.*": z.array(z.string()).optional(),
+  "tencent.*": z.array(z.string()).optional(),
+  "aliyun.*": z.array(z.string()).optional(),
   "az.*": z.array(z.string()).optional(),
+  "doctl.*": z.array(z.string()).optional(),
   "gcloud.*": z.array(z.string()).optional(),
+  "tccli.*": z.array(z.string()).optional(),
 }).passthrough();
 
 function hasOwnKey(input, key) {
@@ -44,10 +58,15 @@ function normalizeCommandLimits(parsedRaw) {
   const parsed = commandLimitsSchema.parse(parsedRaw);
 
   return {
+    "alibaba.*": uniqueStrings(resolveProviderSection(parsedRaw, parsed, "alibaba.*", "aliyun.*")),
     "aws.*": uniqueStrings(resolveProviderSection(parsedRaw, parsed, "aws.*")),
     "azure.*": uniqueStrings(resolveProviderSection(parsedRaw, parsed, "azure.*", "az.*")),
+    "digitalocean.*": uniqueStrings(resolveProviderSection(parsedRaw, parsed, "digitalocean.*", "doctl.*")),
     "gcp.*": uniqueStrings(resolveProviderSection(parsedRaw, parsed, "gcp.*", "gcloud.*")),
+    "huawei.*": uniqueStrings(resolveProviderSection(parsedRaw, parsed, "huawei.*", "hcloud.*")),
+    "ibmcloud.*": uniqueStrings(resolveProviderSection(parsedRaw, parsed, "ibmcloud.*")),
     "oci.*": uniqueStrings(resolveProviderSection(parsedRaw, parsed, "oci.*")),
+    "tencent.*": uniqueStrings(resolveProviderSection(parsedRaw, parsed, "tencent.*", "tccli.*")),
   };
 }
 

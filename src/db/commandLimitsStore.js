@@ -1,6 +1,16 @@
 import { Pool } from "pg";
 
-const COMMAND_LIMIT_KEYS = ["aws.*", "gcp.*", "azure.*", "oci.*"];
+const COMMAND_LIMIT_KEYS = [
+  "aws.*",
+  "gcp.*",
+  "azure.*",
+  "oci.*",
+  "alibaba.*",
+  "digitalocean.*",
+  "ibmcloud.*",
+  "tencent.*",
+  "huawei.*",
+];
 const TABLE_NAME = "cloud_mcp.command_limits";
 
 const DEFAULT_COMMAND_LIMITS = {
@@ -8,6 +18,11 @@ const DEFAULT_COMMAND_LIMITS = {
   "gcp.*": [],
   "azure.*": [],
   "oci.*": [],
+  "alibaba.*": [],
+  "digitalocean.*": [],
+  "ibmcloud.*": [],
+  "tencent.*": [],
+  "huawei.*": [],
 };
 
 function normalizeLimits(input = {}) {
@@ -16,6 +31,11 @@ function normalizeLimits(input = {}) {
     "gcp.*": Array.isArray(input["gcp.*"]) ? input["gcp.*"] : [],
     "azure.*": Array.isArray(input["azure.*"]) ? input["azure.*"] : [],
     "oci.*": Array.isArray(input["oci.*"]) ? input["oci.*"] : [],
+    "alibaba.*": Array.isArray(input["alibaba.*"]) ? input["alibaba.*"] : [],
+    "digitalocean.*": Array.isArray(input["digitalocean.*"]) ? input["digitalocean.*"] : [],
+    "ibmcloud.*": Array.isArray(input["ibmcloud.*"]) ? input["ibmcloud.*"] : [],
+    "tencent.*": Array.isArray(input["tencent.*"]) ? input["tencent.*"] : [],
+    "huawei.*": Array.isArray(input["huawei.*"]) ? input["huawei.*"] : [],
   };
 }
 

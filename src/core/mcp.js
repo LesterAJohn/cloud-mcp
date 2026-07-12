@@ -78,6 +78,23 @@ function registerProviderTools(mcpServer, ctx, providerNames) {
           .object({
             command: z.string().min(1),
             env: z.record(z.string(), z.string()).default({}),
+            defaultProfile: z.string().min(1).optional(),
+            profiles: z
+              .record(
+                z.string(),
+                z.object({
+                  args: z.array(z.string()).default([]),
+                  env: z.record(z.string(), z.string()).default({}),
+                }),
+              )
+              .default({}),
+            profileSupport: z
+              .object({
+                mode: z.enum(["arg", "env"]),
+                flag: z.string().min(1).optional(),
+                envVar: z.string().min(1).optional(),
+              })
+              .optional(),
           })
           .describe("Provider config"),
       },
@@ -101,10 +118,11 @@ function registerProviderTools(mcpServer, ctx, providerNames) {
       inputSchema: {
         provider: z.string().describe("Provider name"),
         args: z.array(z.string()).default([]).describe("Arguments passed to the provider CLI"),
+        profile: z.string().min(1).optional().describe("Optional provider profile/context name"),
       },
     },
-    async ({ provider, args }) => {
-      const result = await runProviderCommand({ provider, args, ctx, stdio: "pipe" });
+    async ({ provider, args, profile }) => {
+      const result = await runProviderCommand({ provider, args, profile, ctx, stdio: "pipe" });
       return toTextContent(result);
     },
   );
@@ -116,10 +134,11 @@ function registerProviderTools(mcpServer, ctx, providerNames) {
         description: `Run the ${provider} CLI command`,
         inputSchema: {
           args: z.array(z.string()).default([]).describe("Arguments passed to the provider CLI"),
+          profile: z.string().min(1).optional().describe("Optional provider profile/context name"),
         },
       },
-      async ({ args }) => {
-        const result = await runProviderCommand({ provider, args, ctx, stdio: "pipe" });
+      async ({ args, profile }) => {
+        const result = await runProviderCommand({ provider, args, profile, ctx, stdio: "pipe" });
         return toTextContent(result);
       },
     );
@@ -143,7 +162,38 @@ function registerCommandLimitsTools(mcpServer, ctx) {
       description: "Set one provider command-limit section in database and force-push cloud-command-limits JSON",
       inputSchema: {
         provider: z
-          .enum(["aws", "aws.*", "gcp", "gcp.*", "gcloud", "gcloud.*", "azure", "azure.*", "az", "az.*", "oci", "oci.*"]) 
+          .enum([
+            "aws",
+            "aws.*",
+            "gcp",
+            "gcp.*",
+            "gcloud",
+            "gcloud.*",
+            "azure",
+            "azure.*",
+            "az",
+            "az.*",
+            "oci",
+            "oci.*",
+            "alibaba",
+            "alibaba.*",
+            "aliyun",
+            "aliyun.*",
+            "digitalocean",
+            "digitalocean.*",
+            "doctl",
+            "doctl.*",
+            "ibmcloud",
+            "ibmcloud.*",
+            "tencent",
+            "tencent.*",
+            "tccli",
+            "tccli.*",
+            "huawei",
+            "huawei.*",
+            "hcloud",
+            "hcloud.*",
+          ])
           .describe("Provider section"),
         allowedPrefixes: z.array(z.string()).default([]).describe("Allowed command prefixes for the section"),
         pushTarget: z
@@ -174,6 +224,11 @@ function registerCommandLimitsTools(mcpServer, ctx) {
             "gcp.*": z.array(z.string()).default([]),
             "azure.*": z.array(z.string()).default([]),
             "oci.*": z.array(z.string()).default([]),
+            "alibaba.*": z.array(z.string()).default([]),
+            "digitalocean.*": z.array(z.string()).default([]),
+            "ibmcloud.*": z.array(z.string()).default([]),
+            "tencent.*": z.array(z.string()).default([]),
+            "huawei.*": z.array(z.string()).default([]),
           })
           .describe("Full canonical command-limits payload"),
         pushTarget: z

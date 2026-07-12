@@ -1,6 +1,11 @@
 {
+  "alibaba.*": [],
   "aws.*": [],
   "az.*": [],
+  "digitalocean.*": [],
   "gcloud.*": [],
-  "oci.*": []
+  "huawei.*": [],
+  "ibmcloud.*": [],
+  "oci.*": [],
+  "tencent.*": []
 }

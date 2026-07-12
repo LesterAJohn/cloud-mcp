@@ -216,10 +216,15 @@ test("auto-selects built-in external vault module from VAULT_PROVIDER", async ()
       .sort();
 
     assert.deepEqual(readPaths, [
+      "http://vault.mock:8200/v1/secret/data/cloud-mcp/providers/alibaba",
       "http://vault.mock:8200/v1/secret/data/cloud-mcp/providers/aws",
       "http://vault.mock:8200/v1/secret/data/cloud-mcp/providers/azure",
+      "http://vault.mock:8200/v1/secret/data/cloud-mcp/providers/digitalocean",
       "http://vault.mock:8200/v1/secret/data/cloud-mcp/providers/gcp",
+      "http://vault.mock:8200/v1/secret/data/cloud-mcp/providers/huawei",
+      "http://vault.mock:8200/v1/secret/data/cloud-mcp/providers/ibmcloud",
       "http://vault.mock:8200/v1/secret/data/cloud-mcp/providers/oci",
+      "http://vault.mock:8200/v1/secret/data/cloud-mcp/providers/tencent",
     ]);
 
     const firstHeaders = calls[0].init.headers;
@@ -231,10 +236,15 @@ test("auto-selects built-in external vault module from VAULT_PROVIDER", async ()
       .map((call) => call.url)
       .sort();
     assert.deepEqual(writePaths, [
+      "http://vault.mock:8200/v1/secret/data/cloud-mcp/providers/alibaba",
       "http://vault.mock:8200/v1/secret/data/cloud-mcp/providers/aws",
       "http://vault.mock:8200/v1/secret/data/cloud-mcp/providers/azure",
+      "http://vault.mock:8200/v1/secret/data/cloud-mcp/providers/digitalocean",
       "http://vault.mock:8200/v1/secret/data/cloud-mcp/providers/gcp",
+      "http://vault.mock:8200/v1/secret/data/cloud-mcp/providers/huawei",
+      "http://vault.mock:8200/v1/secret/data/cloud-mcp/providers/ibmcloud",
       "http://vault.mock:8200/v1/secret/data/cloud-mcp/providers/oci",
+      "http://vault.mock:8200/v1/secret/data/cloud-mcp/providers/tencent",
     ]);
 
     const headers = calls.find((call) => call.init.method === "POST").init.headers;

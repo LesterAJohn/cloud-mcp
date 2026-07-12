@@ -1,4 +1,5 @@
 import { execa } from "execa";
+import { assertProviderCommandAllowed } from "./commandLimits.js";
 
 export async function runProviderCommand({ provider, args, ctx, stdio = "inherit" }) {
   const providerConfig = ctx.vault.get(["providers", provider], ctx.providers[provider]);
@@ -13,6 +14,8 @@ export async function runProviderCommand({ provider, args, ctx, stdio = "inherit
     ...process.env,
     ...providerConfig.env,
   };
+
+  assertProviderCommandAllowed(provider, args, ctx.commandLimits);
 
   ctx.logger.debug({ provider, command, args }, "spawning provider command");
 

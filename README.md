@@ -49,6 +49,74 @@ At runtime, provider resolution order is:
 2. `<PROVIDER>_CLI_BIN` environment override
 3. CLI from `PATH`
 
+Shared command limits live in [mcp/cloud-command-limits.json](/Users/lesterjohn/Documents/GitHub/cloud-mcp/mcp/cloud-command-limits.json).
+
+- Sections are keyed by provider prefix: `aws.*`, `azure.*`, `gcp.*`, `oci.*`
+- If a section is an empty array, all commands for that provider are allowed
+- If a section contains entries, only matching prefixes are allowed
+- Entries may be written as full prefixes like `aws.s3` or shorthand like `s3` within the `aws.*` section
+
+How to fill out the file:
+
+1. Allow everything for every cloud:
+
+```json
+{
+  "aws.*": [],
+  "azure.*": [],
+  "gcp.*": [],
+  "oci.*": []
+}
+```
+
+2. Restrict AWS and GCP, leave Azure and OCI open:
+
+```json
+{
+  "aws.*": ["s3", "sts.get-caller-identity"],
+  "azure.*": [],
+  "gcp.*": ["projects", "compute.instances.list"],
+  "oci.*": []
+}
+```
+
+3. Use full provider-prefixed entries explicitly:
+
+```json
+{
+  "aws.*": ["aws.s3", "aws.sts.get-caller-identity"],
+  "azure.*": [],
+  "gcp.*": ["projects", "compute.instances.list"],
+  "oci.*": ["oci.iam"]
+}
+```
+
+4. Lock each provider to a narrow subset:
+
+```json
+{
+  "aws.*": ["ec2.describe-instances", "s3.ls"],
+  "azure.*": ["vm", "account.show"],
+  "gcp.*": ["projects.list"],
+  "oci.*": ["iam.region.list"]
+}
+```
+
+What the entries mean:
+
+- `"s3"` inside `aws.*` means any AWS command starting with `aws.s3...`
+- `"sts.get-caller-identity"` inside `aws.*` means only `aws sts get-caller-identity`
+- `"projects"` inside `gcp.*` means any GCP command starting with `gcp.projects...`
+- `"oci.iam"` inside `oci.*` means any OCI command starting with `oci.iam...`
+
+With this file:
+
+- `aws s3 ls` is allowed
+- `aws ec2 describe-instances` is denied
+- all Azure commands are allowed
+- `gcloud projects list` is allowed
+- `oci iam region list` is allowed
+
 ## Usage
 
 ### Generic form

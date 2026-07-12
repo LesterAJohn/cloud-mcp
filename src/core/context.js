@@ -1,4 +1,5 @@
 import { loadConfig } from "../config/loadConfig.js";
+import { loadCommandLimits } from "../config/loadCommandLimits.js";
 import { createVaultService } from "./vault.js";
 import { createLogger } from "../utils/logger.js";
 
@@ -66,6 +67,7 @@ function shouldFailClosedOnExternalVault() {
 
 export async function createExecutionContext(options) {
   const config = await loadConfig(options.config);
+  const commandLimits = await loadCommandLimits(options.commandLimitsPath ?? "mcp/cloud-command-limits.json");
   const logger = createLogger(options.logLevel, options.loggerDestination);
   const vault = await createVaultService({
     initialState: config,
@@ -77,6 +79,7 @@ export async function createExecutionContext(options) {
 
   return {
     config,
+    commandLimits,
     logger,
     providers: vault.get(["providers"], config.providers),
     vault,

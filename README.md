@@ -1,0 +1,165 @@
+# cloud-mcp
+
+A Node.js skeleton for wrapping multiple cloud CLIs behind one command surface.
+
+## What this gives you
+
+- Unified CLI entrypoint (`cloud-wrap`)
+- Provider pass-through commands for AWS, GCP, Azure, and OCI
+- Config file support to override command paths and inject environment variables
+- Vault abstraction for storing provider attributes with optional external replacement
+- MCP stdio server that registers provider tools and command runners
+- Structured logging and safe command execution with inherited stdio
+
+## Quick start
+
+```bash
+npm install
+npm run bootstrap:clis
+npm start -- list
+npm start -- aws sts get-caller-identity
+npm start -- oci iam region list
+npm run mcp
+```
+
+## Repository-local CLI layout
+
+This project can keep provider CLI entrypoints under `mcp/<provider>/bin`.
+
+- `mcp/aws/bin/aws`
+- `mcp/gcp/bin/gcloud`
+- `mcp/azure/bin/az`
+- `mcp/oci/bin/oci`
+
+Run the bootstrap command to create links from your installed CLIs into this structure:
+
+```bash
+npm run bootstrap:clis
+```
+
+Or pull and install all CLIs directly into the structure:
+
+```bash
+npm run install:clis
+```
+
+At runtime, provider resolution order is:
+
+1. `mcp/<provider>/bin/<cli>` when present
+2. `<PROVIDER>_CLI_BIN` environment override
+3. CLI from `PATH`
+
+## Usage
+
+### Generic form
+
+```bash
+npm start -- run <provider> [args...]
+```
+
+Examples:
+
+```bash
+npm start -- run aws s3 ls
+npm start -- run gcp projects list
+npm start -- run azure account show
+npm start -- run oci iam region list
+```
+
+### Provider shorthands
+
+```bash
+npm start -- aws s3 ls
+npm start -- gcp projects list
+npm start -- azure account show
+npm start -- oci iam region list
+```
+
+## MCP server
+
+Start the MCP server with:
+
+```bash
+npm run mcp -- --config cloud-wrap.config.json
+```
+
+It registers these tools:
+
+- `list_providers`
+- `get_provider`
+- `set_provider`
+- `run_provider`
+- `run_aws`
+- `run_gcp`
+- `run_azure`
+- `run_oci`
+
+## Configuration
+
+Create `cloud-wrap.config.json` using `cloud-wrap.config.example.json` as a template.
+
+```json
+{
+  "vault": {
+    "module": "./external-vault.js",
+    "options": {}
+  },
+  "providers": {
+    "aws": {
+      "command": "aws",
+      "env": {
+        "AWS_PROFILE": "default"
+      }
+    }
+  }
+}
+```
+
+If `vault.module` is present, the runtime will try to load that module first. The module should expose either `createVault`, a default factory, or a vault object with the same `get`/`set`/`snapshot` methods as the built-in service. If loading fails, the local in-memory vault is used.
+
+Then run:
+
+```bash
+npm start -- --config cloud-wrap.config.json aws sts get-caller-identity
+```
+
+## Extend with additional providers
+
+Add a provider in your config file:
+
+```json
+{
+  "providers": {
+    "do": {
+      "command": "doctl",
+      "env": {
+        "DIGITALOCEAN_ACCESS_TOKEN": "<token>"
+      }
+    }
+  }
+}
+```
+
+Then call:
+
+```bash
+npm start -- run do account get
+```
+
+## Project structure
+
+```text
+src/
+  index.js            # entry point
+  mcp.js              # MCP stdio entry point
+  program.js          # command definitions
+  core/
+    context.js        # runtime context creation
+    execute.js        # provider CLI spawning
+    mcp.js            # MCP tool registration and server startup
+  config/
+    providers.js      # built-in provider defaults
+    loadConfig.js     # config loading and validation
+  utils/
+    logger.js         # pino logger setup
+```

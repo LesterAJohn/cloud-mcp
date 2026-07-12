@@ -1,0 +1,33 @@
+{
+  "vault": {
+    "module": "",
+    "options": {}
+  },
+  "providers": {
+    "aws": {
+      "command": "aws",
+      "env": {
+        "AWS_PROFILE": "default",
+        "AWS_REGION": "us-east-1"
+      }
+    },
+    "gcp": {
+      "command": "gcloud",
+      "env": {
+        "CLOUDSDK_CORE_PROJECT": "my-project"
+      }
+    },
+    "azure": {
+      "command": "az",
+      "env": {
+        "AZURE_CONFIG_DIR": "/tmp/azure-config"
+      }
+    },
+    "oci": {
+      "command": "oci",
+      "env": {
+        "OCI_CLI_PROFILE": "DEFAULT"
+      }
+    }
+  }
+}

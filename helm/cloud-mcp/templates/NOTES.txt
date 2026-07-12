@@ -1,0 +1,5 @@
+1. Verify rollout status:
+   kubectl rollout status deployment/{{ include "cloud-mcp.fullname" . }}
+
+2. Check pod logs:
+   kubectl logs -l app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/name={{ include "cloud-mcp.name" . }} --tail=200

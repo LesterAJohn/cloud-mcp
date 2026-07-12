@@ -1,0 +1,6 @@
+apiVersion: v2
+name: cloud-mcp
+description: Sample Helm chart for deploying cloud-mcp
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

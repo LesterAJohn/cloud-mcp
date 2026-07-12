@@ -1,0 +1,76 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/your-org/cloud-mcp
+  tag: latest
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext: {}
+securityContext: {}
+
+resources: {}
+
+nodeSelector: {}
+affinity: {}
+tolerations: []
+
+service:
+  enabled: false
+  type: ClusterIP
+  port: 8080
+
+mcp:
+  mode: mcp
+  logLevel: info
+
+# Non-secret environment variables passed via ConfigMap
+env:
+  VAULT_PROVIDER: external
+  VAULT_ADDR: ""
+  VAULT_NAMESPACE: ""
+  VAULT_KV_MOUNT: secret
+  VAULT_KV_VERSION: "2"
+  VAULT_SECRET_PATH: cloud-mcp/providers
+  COMMAND_LIMITS_DATABASE_URL: ""
+  COMMAND_LIMITS_LOCAL_POSTGRES_ENABLED: ""
+  COMMAND_LIMITS_LOCAL_POSTGRES_PORT: ""
+  CLOUD_COMMAND_LIMITS_SOURCE: ""
+  CLOUD_COMMAND_LIMITS_REFRESH_INTERVAL_SECONDS: ""
+
+secrets:
+  create: true
+  data:
+    VAULT_TOKEN: ""
+    MCP_PROVIDER_AUTH_KEY: ""
+
+appConfig:
+  vault:
+    module: ""
+    options: {}
+  providers:
+    aws:
+      command: aws
+      env:
+        AWS_REGION: us-east-1
+      defaultProfile: default
+      profileSupport:
+        mode: env
+        envVar: AWS_PROFILE
+      profiles:
+        default:
+          env:
+            AWS_PROFILE: default
+          users: []

@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "cloud-mcp.fullname" . }}-config
+  labels:
+    {{- include "cloud-mcp.labels" . | nindent 4 }}
+data:
+  cloud-wrap.config.json: |
+{{ toPrettyJson .Values.appConfig | indent 4 }}

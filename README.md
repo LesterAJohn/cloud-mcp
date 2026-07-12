@@ -301,6 +301,57 @@ This repository no longer ships a first-party `Dockerfile`, so it does not provi
 
 If your deployment requires containers, provide your own image definition around the Node entrypoints (`node src/mcp.js` for MCP mode, `node src/index.js` for CLI mode) and any cloud CLIs you want available in that runtime.
 
+A sample container definition is available at `docker/Containerfile.sample` and can be used with either Docker or Podman:
+
+```bash
+docker build -f docker/Containerfile.sample -t cloud-mcp:local .
+podman build -f docker/Containerfile.sample -t cloud-mcp:local .
+```
+
+## Kubernetes (Helm) sample
+
+A sample Helm chart is available at `helm/cloud-mcp`.
+
+1. Build and push an image (Docker or Podman):
+
+```bash
+docker build -f docker/Containerfile.sample -t ghcr.io/your-org/cloud-mcp:latest .
+docker push ghcr.io/your-org/cloud-mcp:latest
+```
+
+2. Copy chart values and edit for your environment:
+
+```bash
+cp helm/cloud-mcp/values.yaml helm/cloud-mcp/values.local.yaml
+```
+
+Set at minimum:
+
+- `image.repository`
+- `image.tag`
+- `env.VAULT_ADDR`
+- `secrets.data.VAULT_TOKEN`
+- `env.COMMAND_LIMITS_DATABASE_URL` (or local-postgres toggle values)
+
+3. Install or upgrade:
+
+```bash
+helm upgrade --install cloud-mcp ./helm/cloud-mcp -f helm/cloud-mcp/values.local.yaml
+```
+
+4. Verify:
+
+```bash
+kubectl rollout status deployment/cloud-mcp-cloud-mcp
+kubectl logs deployment/cloud-mcp-cloud-mcp --tail=200
+```
+
+Notes:
+
+- The chart mounts `cloud-wrap.config.json` from a ConfigMap at `/etc/cloud-mcp/cloud-wrap.config.json`.
+- `VAULT_TOKEN` and `MCP_PROVIDER_AUTH_KEY` are provided by Kubernetes Secret (`secrets.data`).
+- Default container args run MCP mode (`mcp --config /etc/cloud-mcp/cloud-wrap.config.json`).
+
 ## Configuration
 
 Create `cloud-wrap.config.json` using `cloud-wrap.config.example.json` as a template.

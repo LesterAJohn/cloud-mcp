@@ -1,0 +1,39 @@
+{
+  "vault": {
+    "options": {
+      "VAULT_PROVIDER": "external",
+      "VAULT_ADDR": "http://127.0.0.1:8200",
+      "VAULT_TOKEN": "replace-with-token",
+      "VAULT_NAMESPACE": "",
+      "VAULT_KV_MOUNT": "secret",
+      "VAULT_KV_VERSION": "2",
+      "VAULT_SECRET_PATH": "cloud-mcp/providers"
+    }
+  },
+  "providers": {
+    "aws": {
+      "command": "aws",
+      "env": {
+        "AWS_PROFILE": "default"
+      }
+    },
+    "gcp": {
+      "command": "gcloud",
+      "env": {
+        "CLOUDSDK_CORE_PROJECT": "my-project"
+      }
+    },
+    "azure": {
+      "command": "az",
+      "env": {
+        "AZURE_CONFIG_DIR": "/tmp/azure-config"
+      }
+    },
+    "oci": {
+      "command": "oci",
+      "env": {
+        "OCI_CLI_PROFILE": "DEFAULT"
+      }
+    }
+  }
+}

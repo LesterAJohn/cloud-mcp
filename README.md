@@ -150,6 +150,36 @@ Create `cloud-wrap.config.json` using `cloud-wrap.config.example.json` as a temp
 
 If `vault.module` is present, the runtime will try to load that module first. The module should expose either `createVault`, a default factory, or a vault object with the same `get`/`set`/`snapshot` methods as the built-in service. If loading fails, the local in-memory vault is used.
 
+This repo also includes a built-in external HashiCorp Vault adapter at `src/core/hashicorpVault.js`, mirrored after the `akoya-mcp` external vault setup. It is auto-selected when either:
+
+- `VAULT_PROVIDER=external`
+- both `VAULT_ADDR` and `VAULT_TOKEN` are set
+
+`CLOUD_WRAP_VAULT_MODULE` still takes precedence over all auto-selection logic.
+
+For external vault integrations, these environment variables are forwarded into the external vault `options` object when set:
+
+- `VAULT_PROVIDER`
+- `VAULT_ADDR`
+- `VAULT_TOKEN`
+- `VAULT_NAMESPACE`
+- `VAULT_KV_MOUNT`
+- `VAULT_KV_VERSION`
+- `VAULT_SECRET_PATH`
+
+When using the built-in external adapter, `VAULT_SECRET_PATH` is treated as a base path and each cloud CLI provider is stored separately:
+
+- `${VAULT_SECRET_PATH}/aws`
+- `${VAULT_SECRET_PATH}/gcp`
+- `${VAULT_SECRET_PATH}/azure`
+- `${VAULT_SECRET_PATH}/oci`
+
+Each provider secret stores one object at key `provider` containing `command` and `env`.
+
+`CLOUD_WRAP_VAULT_MODULE` can also be used to override `vault.module` from config.
+
+For a ready-made external profile, use `cloud-wrap.config.external-vault.example.json`.
+
 Then run:
 
 ```bash

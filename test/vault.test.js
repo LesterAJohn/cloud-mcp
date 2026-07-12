@@ -83,6 +83,8 @@ test("execution context forwards extended VAULT_* options", async () => {
   const previousKvMount = process.env.VAULT_KV_MOUNT;
   const previousKvVersion = process.env.VAULT_KV_VERSION;
   const previousSecretPath = process.env.VAULT_SECRET_PATH;
+  const previousLocalPostgresEnabled = process.env.COMMAND_LIMITS_LOCAL_POSTGRES_ENABLED;
+  const previousLocalPostgresPort = process.env.COMMAND_LIMITS_LOCAL_POSTGRES_PORT;
 
   process.env.CLOUD_WRAP_VAULT_MODULE = "./test/fixtures/external-vault.js";
   process.env.VAULT_PROVIDER = "external";
@@ -92,6 +94,8 @@ test("execution context forwards extended VAULT_* options", async () => {
   process.env.VAULT_KV_MOUNT = "secret";
   process.env.VAULT_KV_VERSION = "2";
   process.env.VAULT_SECRET_PATH = "cloud-wrap/providers";
+  process.env.COMMAND_LIMITS_LOCAL_POSTGRES_ENABLED = "false";
+  process.env.COMMAND_LIMITS_LOCAL_POSTGRES_PORT = "5432";
 
   try {
     const ctx = await createExecutionContext({
@@ -106,6 +110,8 @@ test("execution context forwards extended VAULT_* options", async () => {
     assert.equal(ctx.vault.get(["_meta", "options", "VAULT_KV_MOUNT"]), "secret");
     assert.equal(ctx.vault.get(["_meta", "options", "VAULT_KV_VERSION"]), "2");
     assert.equal(ctx.vault.get(["_meta", "options", "VAULT_SECRET_PATH"]), "cloud-wrap/providers");
+    assert.equal(ctx.vault.get(["_meta", "options", "COMMAND_LIMITS_LOCAL_POSTGRES_ENABLED"]), "false");
+    assert.equal(ctx.vault.get(["_meta", "options", "COMMAND_LIMITS_LOCAL_POSTGRES_PORT"]), "5432");
   } finally {
     if (previousModule === undefined) {
       delete process.env.CLOUD_WRAP_VAULT_MODULE;
@@ -153,6 +159,18 @@ test("execution context forwards extended VAULT_* options", async () => {
       delete process.env.VAULT_SECRET_PATH;
     } else {
       process.env.VAULT_SECRET_PATH = previousSecretPath;
+    }
+
+    if (previousLocalPostgresEnabled === undefined) {
+      delete process.env.COMMAND_LIMITS_LOCAL_POSTGRES_ENABLED;
+    } else {
+      process.env.COMMAND_LIMITS_LOCAL_POSTGRES_ENABLED = previousLocalPostgresEnabled;
+    }
+
+    if (previousLocalPostgresPort === undefined) {
+      delete process.env.COMMAND_LIMITS_LOCAL_POSTGRES_PORT;
+    } else {
+      process.env.COMMAND_LIMITS_LOCAL_POSTGRES_PORT = previousLocalPostgresPort;
     }
   }
 });

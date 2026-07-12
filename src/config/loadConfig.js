@@ -28,10 +28,24 @@ const providerSchema = z.object({
     .optional(),
 });
 
+const vaultOptionsSchema = z
+  .object({
+    VAULT_PROVIDER: z.string().optional(),
+    VAULT_ADDR: z.string().optional(),
+    VAULT_TOKEN: z.string().optional(),
+    VAULT_NAMESPACE: z.string().optional(),
+    VAULT_KV_MOUNT: z.string().optional(),
+    VAULT_KV_VERSION: z.string().optional(),
+    VAULT_SECRET_PATH: z.string().optional(),
+    COMMAND_LIMITS_LOCAL_POSTGRES_ENABLED: z.string().optional(),
+    COMMAND_LIMITS_LOCAL_POSTGRES_PORT: z.string().optional(),
+  })
+  .passthrough();
+
 const vaultSchema = z
   .object({
     module: z.string().optional(),
-    options: z.record(z.string(), z.any()).default({}),
+    options: vaultOptionsSchema.default({}),
   })
   .default({ options: {} });
 

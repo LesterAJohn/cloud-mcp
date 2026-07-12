@@ -38,6 +38,14 @@ function buildVaultOptions(configVaultOptions = {}) {
     options.VAULT_SECRET_PATH = process.env.VAULT_SECRET_PATH;
   }
 
+  if (process.env.COMMAND_LIMITS_LOCAL_POSTGRES_ENABLED) {
+    options.COMMAND_LIMITS_LOCAL_POSTGRES_ENABLED = process.env.COMMAND_LIMITS_LOCAL_POSTGRES_ENABLED;
+  }
+
+  if (process.env.COMMAND_LIMITS_LOCAL_POSTGRES_PORT) {
+    options.COMMAND_LIMITS_LOCAL_POSTGRES_PORT = process.env.COMMAND_LIMITS_LOCAL_POSTGRES_PORT;
+  }
+
   return options;
 }
 

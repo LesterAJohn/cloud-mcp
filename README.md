@@ -381,6 +381,8 @@ For external vault integrations, these environment variables are forwarded into 
 - `VAULT_KV_MOUNT`
 - `VAULT_KV_VERSION`
 - `VAULT_SECRET_PATH`
+- `COMMAND_LIMITS_LOCAL_POSTGRES_ENABLED`
+- `COMMAND_LIMITS_LOCAL_POSTGRES_PORT`
 
 Required vault key contract:
 

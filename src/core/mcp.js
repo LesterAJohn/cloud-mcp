@@ -85,6 +85,7 @@ function registerProviderTools(mcpServer, ctx, providerNames) {
                 z.object({
                   args: z.array(z.string()).default([]),
                   env: z.record(z.string(), z.string()).default({}),
+                  users: z.array(z.string()).default([]),
                 }),
               )
               .default({}),
@@ -119,10 +120,11 @@ function registerProviderTools(mcpServer, ctx, providerNames) {
         provider: z.string().describe("Provider name"),
         args: z.array(z.string()).default([]).describe("Arguments passed to the provider CLI"),
         profile: z.string().min(1).optional().describe("Optional provider profile/context name"),
+        user: z.string().min(1).optional().describe("Optional user identity for profile access checks"),
       },
     },
-    async ({ provider, args, profile }) => {
-      const result = await runProviderCommand({ provider, args, profile, ctx, stdio: "pipe" });
+    async ({ provider, args, profile, user }) => {
+      const result = await runProviderCommand({ provider, args, profile, user, ctx, stdio: "pipe" });
       return toTextContent(result);
     },
   );
@@ -135,10 +137,11 @@ function registerProviderTools(mcpServer, ctx, providerNames) {
         inputSchema: {
           args: z.array(z.string()).default([]).describe("Arguments passed to the provider CLI"),
           profile: z.string().min(1).optional().describe("Optional provider profile/context name"),
+          user: z.string().min(1).optional().describe("Optional user identity for profile access checks"),
         },
       },
-      async ({ args, profile }) => {
-        const result = await runProviderCommand({ provider, args, profile, ctx, stdio: "pipe" });
+      async ({ args, profile, user }) => {
+        const result = await runProviderCommand({ provider, args, profile, user, ctx, stdio: "pipe" });
         return toTextContent(result);
       },
     );

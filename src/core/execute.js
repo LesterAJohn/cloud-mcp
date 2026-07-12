@@ -1,11 +1,51 @@
 import { execa } from "execa";
 import { assertProviderCommandAllowed } from "./commandLimits.js";
 
-function resolveProviderExecution(providerConfig, requestedArgs, selectedProfile) {
+function resolveExecutionUser(explicitUser) {
+  if (typeof explicitUser === "string" && explicitUser.trim().length > 0) {
+    return explicitUser.trim();
+  }
+
+  for (const candidate of [process.env.CLOUD_MCP_USER, process.env.MCP_USER, process.env.USER]) {
+    if (typeof candidate === "string" && candidate.trim().length > 0) {
+      return candidate.trim();
+    }
+  }
+
+  return null;
+}
+
+function assertProfileUserAuthorized({ provider, profile, profileConfig, executionUser }) {
+  const allowedUsers = Array.isArray(profileConfig?.users)
+    ? profileConfig.users.filter((user) => typeof user === "string" && user.trim().length > 0)
+    : [];
+
+  if (allowedUsers.length === 0) {
+    return;
+  }
+
+  if (!executionUser || !allowedUsers.includes(executionUser)) {
+    throw new Error(
+      `Unauthorized: user '${executionUser ?? "unknown"}' is not allowed to use profile '${profile}' for provider '${provider}'`,
+    );
+  }
+}
+
+function resolveProviderExecution(provider, providerConfig, requestedArgs, selectedProfile, selectedUser) {
   const args = Array.isArray(requestedArgs) ? [...requestedArgs] : [];
   const profile = selectedProfile ?? providerConfig.defaultProfile;
   const profiles = providerConfig.profiles ?? {};
   const profileConfig = profile ? profiles[profile] : undefined;
+  const executionUser = resolveExecutionUser(selectedUser);
+
+  if (profile && profileConfig) {
+    assertProfileUserAuthorized({
+      provider,
+      profile,
+      profileConfig,
+      executionUser,
+    });
+  }
 
   const env = {
     ...(providerConfig.env ?? {}),
@@ -39,10 +79,11 @@ function resolveProviderExecution(providerConfig, requestedArgs, selectedProfile
     env,
     finalArgs,
     profile,
+    user: executionUser,
   };
 }
 
-export async function runProviderCommand({ provider, args, profile, ctx, stdio = "inherit" }) {
+export async function runProviderCommand({ provider, args, profile, user, ctx, stdio = "inherit" }) {
   const providerConfig = ctx.vault.get(["providers", provider], ctx.providers[provider]);
 
   if (!providerConfig) {
@@ -51,7 +92,7 @@ export async function runProviderCommand({ provider, args, profile, ctx, stdio =
   }
 
   const command = providerConfig.command;
-  const execution = resolveProviderExecution(providerConfig, args, profile);
+  const execution = resolveProviderExecution(provider, providerConfig, args, profile, user);
   const mergedEnv = {
     ...process.env,
     ...execution.env,
@@ -60,7 +101,10 @@ export async function runProviderCommand({ provider, args, profile, ctx, stdio =
   const commandLimits = await ctx.commandLimitsStore.getAll();
   assertProviderCommandAllowed(provider, execution.finalArgs, commandLimits);
 
-  ctx.logger.debug({ provider, command, args: execution.finalArgs, profile: execution.profile }, "spawning provider command");
+  ctx.logger.debug(
+    { provider, command, args: execution.finalArgs, profile: execution.profile, user: execution.user },
+    "spawning provider command",
+  );
 
   if (stdio === "inherit") {
     await execa(command, execution.finalArgs, {

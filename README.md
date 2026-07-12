@@ -326,7 +326,8 @@ Create `cloud-wrap.config.json` using `cloud-wrap.config.example.json` as a temp
         "default": {
           "env": {
             "AWS_PROFILE": "default"
-          }
+          },
+          "users": []
         }
       }
     }
@@ -367,6 +368,7 @@ Required vault key contract:
   - key name: `provider`
   - required object fields: `command` (string), `env` (object)
   - optional profile fields: `defaultProfile` (string), `profiles` (map), `profileSupport` (`mode=arg|env`, with `flag` or `envVar`)
+  - optional per-profile access field: `profiles.<name>.users` (string array)
 - Provider authorization key (when enabled):
   - set `MCP_PROVIDER_AUTH_KEY` to seed vault path `mcp.authorization.providerKey`
   - `get_provider` and `set_provider` requests must include `authorizationKey` matching that value
@@ -388,8 +390,12 @@ Each provider secret stores one object at key `provider` containing `command`, `
 Multi-profile provider behavior:
 
 - `run_provider` and `run_<provider>` accept optional `profile`.
+- `run_provider` and `run_<provider>` accept optional `user` for profile access checks.
 - If `profile` is provided, runtime applies `profileSupport` to inject profile context via args or env.
 - `profiles.<name>.args` and `profiles.<name>.env` are merged into execution.
+- `profiles.<name>.users` controls profile access:
+  - empty or missing array means profile is available to all users
+  - non-empty array restricts profile use to those users
 - If `profile` is omitted and `defaultProfile` is configured, that profile is used.
 
 `CLOUD_WRAP_VAULT_MODULE` can also be used to override `vault.module` from config.

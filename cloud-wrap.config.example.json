@@ -18,7 +18,8 @@
         "default": {
           "env": {
             "AWS_PROFILE": "default"
-          }
+          },
+          "users": []
         }
       }
     },
@@ -36,7 +37,8 @@
         "default": {
           "env": {
             "CLOUDSDK_ACTIVE_CONFIG_NAME": "default"
-          }
+          },
+          "users": []
         }
       }
     },
@@ -60,7 +62,8 @@
         "DEFAULT": {
           "env": {
             "OCI_CLI_PROFILE": "DEFAULT"
-          }
+          },
+          "users": []
         }
       }
     },
@@ -73,7 +76,8 @@
       },
       "profiles": {
         "prod": {
-          "args": ["--region", "cn-hangzhou"]
+          "args": ["--region", "cn-hangzhou"],
+          "users": ["platform-admin", "secops"]
         }
       }
     },

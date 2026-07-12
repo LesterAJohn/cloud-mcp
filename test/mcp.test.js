@@ -69,6 +69,7 @@ test("run_provider applies profile settings from provider config", async () => {
             env: {
               TEST_PROFILE_ENV: "prod-profile",
             },
+            users: [],
           },
         },
       },
@@ -86,6 +87,68 @@ test("run_provider applies profile settings from provider config", async () => {
     assert.deepEqual(payload.args, ["resource", "list"]);
     assert.equal(payload.env.TEST_PROFILE_ENV, "prod-profile");
     assert.equal(payload.env.TEST_SELECTED_PROFILE, "prod");
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("run_provider enforces profile users allowlist", async () => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "cloud-mcp-profile-users-"));
+  const outputPath = path.join(tempDir, "profile-users-output.json");
+
+  try {
+    const { mcpServer } = await createCloudMcpServer({
+      config: "cloud-wrap.config.example.json",
+      logLevel: "silent",
+    });
+
+    const writerProgram = [
+      "const fs = require('node:fs');",
+      "const outPath = process.env.TEST_PROFILE_OUTPUT_PATH;",
+      "fs.writeFileSync(outPath, JSON.stringify({ ok: true }));",
+    ].join("");
+
+    await mcpServer._registeredTools.set_provider.handler({
+      provider: "profileauth",
+      config: {
+        command: "node",
+        env: {
+          TEST_PROFILE_OUTPUT_PATH: outputPath,
+        },
+        profileSupport: {
+          mode: "env",
+          envVar: "TEST_SELECTED_PROFILE",
+        },
+        profiles: {
+          restricted: {
+            args: ["-e", writerProgram],
+            users: ["alice", "bob"],
+          },
+        },
+      },
+    });
+
+    await assert.rejects(
+      async () =>
+        mcpServer._registeredTools.run_provider.handler({
+          provider: "profileauth",
+          profile: "restricted",
+          user: "charlie",
+          args: ["noop"],
+        }),
+      /Unauthorized: user 'charlie' is not allowed to use profile 'restricted'/,
+    );
+
+    await mcpServer._registeredTools.run_provider.handler({
+      provider: "profileauth",
+      profile: "restricted",
+      user: "alice",
+      args: ["noop"],
+    });
+
+    const raw = await readFile(outputPath, "utf8");
+    const payload = JSON.parse(raw);
+    assert.equal(payload.ok, true);
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }

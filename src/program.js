@@ -31,6 +31,7 @@ export function buildProgram() {
     .argument("<provider>", "provider key, e.g. aws|gcp|azure|oci|alibaba|digitalocean|ibmcloud|tencent|huawei")
     .argument("[args...]", "arguments passed through to provider CLI")
     .option("--profile <name>", "optional provider profile/context name")
+    .option("--user <name>", "optional user identity for profile access checks")
     .allowUnknownOption(true)
     .action(async (provider, args = [], command) => {
       const ctx = await createExecutionContext(program.opts());
@@ -38,6 +39,7 @@ export function buildProgram() {
         provider,
         args,
         profile: command.profile,
+        user: command.user,
         ctx,
       });
     });
@@ -48,6 +50,7 @@ export function buildProgram() {
       .description(`shorthand for 'run ${provider} ...'`)
       .argument("[args...]", `arguments passed through to ${provider}`)
       .option("--profile <name>", "optional provider profile/context name")
+      .option("--user <name>", "optional user identity for profile access checks")
       .allowUnknownOption(true)
       .action(async (args = [], command) => {
         const ctx = await createExecutionContext(program.opts());
@@ -55,6 +58,7 @@ export function buildProgram() {
           provider,
           args,
           profile: command.profile,
+          user: command.user,
           ctx,
         });
       });

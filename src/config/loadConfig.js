@@ -16,6 +16,7 @@ const providerSchema = z.object({
       z.object({
         args: z.array(z.string()).default([]),
         env: z.record(z.string(), z.string()).default({}),
+        users: z.array(z.string()).default([]),
       }),
     )
     .default({}),

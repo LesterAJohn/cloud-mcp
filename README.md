@@ -358,6 +358,99 @@ export MCP_HTTP_OAUTH2_REQUIRED_SCOPES="mcp:invoke"
 npm run mcp -- --config cloud-wrap.config.json
 ```
 
+### Register This MCP In Codex, VS Code, and Claude
+
+Use stdio transport for client registration. Keep this repository path and config path as absolute paths.
+
+1. Start from a known absolute repo path:
+
+```bash
+cd /Users/lesterjohn/Documents/GitHub/cloud-mcp
+pwd
+```
+
+2. Confirm local launch command works before registering:
+
+```bash
+npm run mcp -- --transport stdio --config /Users/lesterjohn/Documents/GitHub/cloud-mcp/cloud-wrap.config.json
+```
+
+3. Register in Codex.
+On macOS, edit `~/.codex/config.toml` and add:
+
+```toml
+[mcp_servers.cloud-mcp]
+command = "npm"
+args = [
+  "run",
+  "mcp",
+  "--",
+  "--transport",
+  "stdio",
+  "--config",
+  "/Users/lesterjohn/Documents/GitHub/cloud-mcp/cloud-wrap.config.json"
+]
+cwd = "/Users/lesterjohn/Documents/GitHub/cloud-mcp"
+```
+
+4. Register in VS Code.
+Create or update workspace file `.vscode/mcp.json` with:
+
+```json
+{
+  "servers": {
+    "cloud-mcp": {
+      "command": "npm",
+      "args": [
+        "run",
+        "mcp",
+        "--",
+        "--transport",
+        "stdio",
+        "--config",
+        "/Users/lesterjohn/Documents/GitHub/cloud-mcp/cloud-wrap.config.json"
+      ],
+      "cwd": "/Users/lesterjohn/Documents/GitHub/cloud-mcp"
+    }
+  }
+}
+```
+
+Then reload VS Code window and verify `cloud-mcp` appears in MCP server list.
+
+5. Register in Claude Desktop.
+On macOS, edit `~/Library/Application Support/Claude/claude_desktop_config.json` and add:
+
+```json
+{
+  "mcpServers": {
+    "cloud-mcp": {
+      "command": "npm",
+      "args": [
+        "run",
+        "mcp",
+        "--",
+        "--transport",
+        "stdio",
+        "--config",
+        "/Users/lesterjohn/Documents/GitHub/cloud-mcp/cloud-wrap.config.json"
+      ],
+      "cwd": "/Users/lesterjohn/Documents/GitHub/cloud-mcp"
+    }
+  }
+}
+```
+
+6. Restart the client app after config changes.
+
+7. Validate tool registration from the client by calling `list_providers` first, then `run_provider`.
+
+Notes:
+
+- If your client already has config content, merge only the `cloud-mcp` server entry.
+- If your environment needs auth, set env vars before launching the client (`MCP_HTTP_*`, `MCP_PROVIDER_AUTH_KEY`, Vault vars).
+- For remote HTTP integration instead of stdio, run `npm run mcp:http` and register endpoint `http://127.0.0.1:3000/mcp` with the client that supports streamable HTTP MCP.
+
 It registers these tools:
 
 - `list_providers`

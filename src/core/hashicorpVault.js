@@ -62,6 +62,48 @@ function buildProviderSecretPath(basePath, providerName) {
   return `${basePath}/${normalizeProviderName(providerName)}`;
 }
 
+function normalizePathSegments(pathInput) {
+  if (Array.isArray(pathInput)) {
+    return pathInput.filter((segment) => typeof segment === "string" && segment.length > 0);
+  }
+
+  if (typeof pathInput === "string") {
+    return pathInput
+      .split(".")
+      .flatMap((segment) => segment.split("/"))
+      .filter((segment) => segment.length > 0);
+  }
+
+  return [];
+}
+
+function setNestedValue(target, pathSegments, value) {
+  if (!pathSegments.length) {
+    return;
+  }
+
+  let current = target;
+  for (let index = 0; index < pathSegments.length - 1; index += 1) {
+    const segment = pathSegments[index];
+    if (!current[segment] || typeof current[segment] !== "object") {
+      current[segment] = {};
+    }
+
+    current = current[segment];
+  }
+
+  current[pathSegments[pathSegments.length - 1]] = value;
+}
+
+function pathMatches(pathInput, expectedSegments) {
+  const actual = normalizePathSegments(pathInput);
+  if (actual.length !== expectedSegments.length) {
+    return false;
+  }
+
+  return actual.every((segment, index) => segment === expectedSegments[index]);
+}
+
 async function createVaultHttpClient(config) {
   const baseAddress = normalizeBaseAddress(config.address);
   const headersBase = {
@@ -162,10 +204,71 @@ async function createVaultHttpClient(config) {
     );
   }
 
+  async function readSecret(secretPath) {
+    const payload = await request(
+      "GET",
+      buildReadPath({
+        kvMount: config.kvMount,
+        kvVersion: config.kvVersion,
+        secretPath,
+      }),
+      undefined,
+      true,
+    );
+
+    if (!payload) {
+      return null;
+    }
+
+    return getSecretData(payload, config.kvVersion);
+  }
+
+  async function writeSecret(secretPath, value) {
+    const payloadValue = value && typeof value === "object" && !Array.isArray(value) ? value : { value };
+    if (config.kvVersion === 1) {
+      await request(
+        "POST",
+        buildWritePath({
+          kvMount: config.kvMount,
+          kvVersion: config.kvVersion,
+          secretPath,
+        }),
+        payloadValue,
+      );
+      return;
+    }
+
+    await request(
+      "POST",
+      buildWritePath({
+        kvMount: config.kvMount,
+        kvVersion: config.kvVersion,
+        secretPath,
+      }),
+      { data: payloadValue },
+    );
+  }
+
+  async function deleteSecret(secretPath) {
+    await request(
+      "DELETE",
+      buildDeletePath({
+        kvMount: config.kvMount,
+        kvVersion: config.kvVersion,
+        secretPath,
+      }),
+      undefined,
+      true,
+    );
+  }
+
   return {
     readProvider,
     writeProvider,
     deleteProvider,
+    readSecret,
+    writeSecret,
+    deleteSecret,
   };
 }
 
@@ -182,6 +285,7 @@ export async function createVault({ initialState, options = {}, logger }) {
     kvMount: normalizePath(options.VAULT_KV_MOUNT ?? "secret"),
     kvVersion: parseKvVersion(options.VAULT_KV_VERSION),
     secretBasePath: normalizePath(options.VAULT_SECRET_PATH ?? "cloud-mcp/providers"),
+    tokenIndexPath: normalizePath(options.MCP_HTTP_VAULT_TOKEN_INDEX_PATH ?? "cloud-mcp/http/auth/token-index"),
   };
 
   if (!config.address || !config.token) {
@@ -209,6 +313,12 @@ export async function createVault({ initialState, options = {}, logger }) {
       ...providersFromVault,
     },
   };
+
+  const tokenIndexFromVault = await client.readSecret(config.tokenIndexPath);
+  const tokenIndexSegments = config.tokenIndexPath.split("/").filter((segment) => segment.length > 0);
+  if (tokenIndexFromVault && typeof tokenIndexFromVault === "object") {
+    setNestedValue(mergedState, tokenIndexSegments, tokenIndexFromVault);
+  }
 
   const localVault = createLocalVault(mergedState);
   let persistedProviderNames = new Set(configuredProviderNames);
@@ -246,6 +356,18 @@ export async function createVault({ initialState, options = {}, logger }) {
     });
   }
 
+  function persistTokenIndex(value) {
+    void client.writeSecret(config.tokenIndexPath, value).catch((error) => {
+      logger?.warn?.({ error, tokenIndexPath: config.tokenIndexPath }, "failed to persist token index to external vault");
+    });
+  }
+
+  function deleteTokenIndex() {
+    void client.deleteSecret(config.tokenIndexPath).catch((error) => {
+      logger?.warn?.({ error, tokenIndexPath: config.tokenIndexPath }, "failed to delete token index from external vault");
+    });
+  }
+
   return {
     get(path, defaultValue) {
       return localVault.get(path, defaultValue);
@@ -253,6 +375,9 @@ export async function createVault({ initialState, options = {}, logger }) {
     set(path, value) {
       const result = localVault.set(path, value);
       persistProviders();
+      if (pathMatches(path, tokenIndexSegments)) {
+        persistTokenIndex(value);
+      }
       return result;
     },
     has(path) {
@@ -262,6 +387,9 @@ export async function createVault({ initialState, options = {}, logger }) {
       const deleted = localVault.delete(path);
       if (deleted) {
         persistProviders();
+        if (pathMatches(path, tokenIndexSegments)) {
+          deleteTokenIndex();
+        }
       }
       return deleted;
     },

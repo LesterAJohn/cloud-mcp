@@ -298,6 +298,21 @@ HTTP authentication framework:
   - `MCP_HTTP_OAUTH2_TIMEOUT_MS` (optional)
   - `MCP_HTTP_OAUTH2_CACHE_TTL_MS` (optional)
 
+HTTP hardening controls:
+
+- `MCP_HTTP_TRUST_PROXY` (optional: `true|false`)
+- `MCP_HTTP_ALLOWED_ORIGINS` (comma-separated allowlist)
+- `MCP_HTTP_ALLOWED_IPS` (comma-separated allowlist)
+- `MCP_HTTP_RATE_LIMIT_WINDOW_MS` (default: `60000`)
+- `MCP_HTTP_RATE_LIMIT_MAX_REQUESTS` (default: `60`)
+- `MCP_HTTP_MAX_BODY_BYTES` (default: `1048576`)
+
+When allowlists are set:
+
+- requests outside allowed IPs are rejected with `403`
+- requests with disallowed origin/host are rejected with `403`
+- per-IP rate limit violations return `429` with `Retry-After`
+
 Example: bearer tokens only
 
 ```bash

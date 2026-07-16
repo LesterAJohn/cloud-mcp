@@ -46,6 +46,10 @@ function buildVaultOptions(configVaultOptions = {}) {
     options.COMMAND_LIMITS_LOCAL_POSTGRES_PORT = process.env.COMMAND_LIMITS_LOCAL_POSTGRES_PORT;
   }
 
+  if (process.env.MCP_HTTP_VAULT_TOKEN_INDEX_PATH) {
+    options.MCP_HTTP_VAULT_TOKEN_INDEX_PATH = process.env.MCP_HTTP_VAULT_TOKEN_INDEX_PATH;
+  }
+
   return options;
 }
 

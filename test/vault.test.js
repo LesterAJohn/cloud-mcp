@@ -85,6 +85,7 @@ test("execution context forwards extended VAULT_* options", async () => {
   const previousSecretPath = process.env.VAULT_SECRET_PATH;
   const previousLocalPostgresEnabled = process.env.COMMAND_LIMITS_LOCAL_POSTGRES_ENABLED;
   const previousLocalPostgresPort = process.env.COMMAND_LIMITS_LOCAL_POSTGRES_PORT;
+  const previousTokenIndexPath = process.env.MCP_HTTP_VAULT_TOKEN_INDEX_PATH;
 
   process.env.CLOUD_WRAP_VAULT_MODULE = "./test/fixtures/external-vault.js";
   process.env.VAULT_PROVIDER = "external";
@@ -96,6 +97,7 @@ test("execution context forwards extended VAULT_* options", async () => {
   process.env.VAULT_SECRET_PATH = "cloud-wrap/providers";
   process.env.COMMAND_LIMITS_LOCAL_POSTGRES_ENABLED = "false";
   process.env.COMMAND_LIMITS_LOCAL_POSTGRES_PORT = "5432";
+  process.env.MCP_HTTP_VAULT_TOKEN_INDEX_PATH = "cloud-mcp/http/auth/token-index";
 
   try {
     const ctx = await createExecutionContext({
@@ -112,6 +114,7 @@ test("execution context forwards extended VAULT_* options", async () => {
     assert.equal(ctx.vault.get(["_meta", "options", "VAULT_SECRET_PATH"]), "cloud-wrap/providers");
     assert.equal(ctx.vault.get(["_meta", "options", "COMMAND_LIMITS_LOCAL_POSTGRES_ENABLED"]), "false");
     assert.equal(ctx.vault.get(["_meta", "options", "COMMAND_LIMITS_LOCAL_POSTGRES_PORT"]), "5432");
+    assert.equal(ctx.vault.get(["_meta", "options", "MCP_HTTP_VAULT_TOKEN_INDEX_PATH"]), "cloud-mcp/http/auth/token-index");
   } finally {
     if (previousModule === undefined) {
       delete process.env.CLOUD_WRAP_VAULT_MODULE;
@@ -172,6 +175,12 @@ test("execution context forwards extended VAULT_* options", async () => {
     } else {
       process.env.COMMAND_LIMITS_LOCAL_POSTGRES_PORT = previousLocalPostgresPort;
     }
+
+    if (previousTokenIndexPath === undefined) {
+      delete process.env.MCP_HTTP_VAULT_TOKEN_INDEX_PATH;
+    } else {
+      process.env.MCP_HTTP_VAULT_TOKEN_INDEX_PATH = previousTokenIndexPath;
+    }
   }
 });
 
@@ -181,12 +190,14 @@ test("auto-selects built-in external vault module from VAULT_PROVIDER", async ()
   const previousAddr = process.env.VAULT_ADDR;
   const previousToken = process.env.VAULT_TOKEN;
   const previousNamespace = process.env.VAULT_NAMESPACE;
+  const previousTokenIndexPath = process.env.MCP_HTTP_VAULT_TOKEN_INDEX_PATH;
   const previousFetch = globalThis.fetch;
 
   process.env.VAULT_PROVIDER = "external";
   process.env.VAULT_ADDR = "http://vault.mock:8200";
   process.env.VAULT_TOKEN = "mock-token";
   process.env.VAULT_NAMESPACE = "engineering";
+  process.env.MCP_HTTP_VAULT_TOKEN_INDEX_PATH = "cloud-mcp/http/auth/token-index";
   delete process.env.CLOUD_WRAP_VAULT_MODULE;
 
   const calls = [];
@@ -211,6 +222,21 @@ test("auto-selects built-in external vault module from VAULT_PROVIDER", async ()
     }
 
     if (init.method === "GET") {
+      if (String(url).endsWith("/secret/data/cloud-mcp/http/auth/token-index")) {
+        return new Response(
+          JSON.stringify({
+            data: {
+              data: {
+                tokens: {
+                  abc: { active: true },
+                },
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
       return new Response("", { status: 404 });
     }
 
@@ -228,12 +254,14 @@ test("auto-selects built-in external vault module from VAULT_PROVIDER", async ()
 
     assert.equal(ctx.providers.aws.command, "aws-from-external-vault");
     assert.equal(calls.length > 0, true);
+    assert.equal(ctx.vault.get(["cloud-mcp", "http", "auth", "token-index", "tokens", "abc", "active"]), true);
     const readPaths = calls
       .filter((call) => call.init.method === "GET")
       .map((call) => call.url)
       .sort();
 
     assert.deepEqual(readPaths, [
+      "http://vault.mock:8200/v1/secret/data/cloud-mcp/http/auth/token-index",
       "http://vault.mock:8200/v1/secret/data/cloud-mcp/providers/alibaba",
       "http://vault.mock:8200/v1/secret/data/cloud-mcp/providers/aws",
       "http://vault.mock:8200/v1/secret/data/cloud-mcp/providers/azure",
@@ -264,6 +292,17 @@ test("auto-selects built-in external vault module from VAULT_PROVIDER", async ()
       "http://vault.mock:8200/v1/secret/data/cloud-mcp/providers/oci",
       "http://vault.mock:8200/v1/secret/data/cloud-mcp/providers/tencent",
     ]);
+
+    ctx.vault.set(["cloud-mcp", "http", "auth", "token-index"], {
+      tokens: {
+        def: { active: true },
+      },
+    });
+
+    const tokenIndexWrites = calls.filter((call) =>
+      call.url === "http://vault.mock:8200/v1/secret/data/cloud-mcp/http/auth/token-index" && call.init.method === "POST",
+    );
+    assert.equal(tokenIndexWrites.length > 0, true);
 
     const headers = calls.find((call) => call.init.method === "POST").init.headers;
     assert.equal(headers["X-Vault-Token"], "mock-token");
@@ -299,6 +338,12 @@ test("auto-selects built-in external vault module from VAULT_PROVIDER", async ()
       delete process.env.VAULT_NAMESPACE;
     } else {
       process.env.VAULT_NAMESPACE = previousNamespace;
+    }
+
+    if (previousTokenIndexPath === undefined) {
+      delete process.env.MCP_HTTP_VAULT_TOKEN_INDEX_PATH;
+    } else {
+      process.env.MCP_HTTP_VAULT_TOKEN_INDEX_PATH = previousTokenIndexPath;
     }
   }
 });

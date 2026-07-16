@@ -37,8 +37,41 @@ async function main() {
     } else if (arg === "--http-auth-mode") {
       options.authMode = args[index + 1];
       index += 1;
+    } else if (arg === "--http-token-source") {
+      options.tokenSource = args[index + 1];
+      index += 1;
     } else if (arg === "--http-auth-tokens") {
       options.authTokens = args[index + 1];
+      index += 1;
+    } else if (arg === "--http-vault-token-index-path") {
+      options.vaultTokenIndexPath = args[index + 1];
+      index += 1;
+    } else if (arg === "--http-vault-token-default-user-id") {
+      options.vaultTokenDefaultUserId = args[index + 1];
+      index += 1;
+    } else if (arg === "--http-vault-token-required-scopes") {
+      options.vaultTokenRequiredScopes = args[index + 1];
+      index += 1;
+    } else if (arg === "--http-vault-token-required-audience") {
+      options.vaultTokenRequiredAudience = args[index + 1];
+      index += 1;
+    } else if (arg === "--http-vault-token-cache-ttl-ms") {
+      options.vaultTokenCacheTtlMs = args[index + 1];
+      index += 1;
+    } else if (arg === "--http-trust-proxy") {
+      options.httpTrustedProxy = args[index + 1];
+      index += 1;
+    } else if (arg === "--http-allowed-origins") {
+      options.httpAllowedOrigins = args[index + 1];
+      index += 1;
+    } else if (arg === "--http-allowed-ips") {
+      options.httpAllowedIps = args[index + 1];
+      index += 1;
+    } else if (arg === "--http-rate-limit-window-ms") {
+      options.httpRateLimitWindowMs = args[index + 1];
+      index += 1;
+    } else if (arg === "--http-rate-limit-max-requests") {
+      options.httpRateLimitMaxRequests = args[index + 1];
       index += 1;
     } else if (arg === "--oauth-introspection-url") {
       options.oauthIntrospectionUrl = args[index + 1];

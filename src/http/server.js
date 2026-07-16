@@ -24,6 +24,91 @@ function headerValue(headers, key) {
   return value ?? null;
 }
 
+function splitCsv(input) {
+  return String(input ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+function asBoolean(value, defaultValue = false) {
+  if (value === undefined || value === null || value === "") {
+    return defaultValue;
+  }
+
+  return ["1", "true", "yes", "on"].includes(String(value).trim().toLowerCase());
+}
+
+function stripPort(host) {
+  if (!host) {
+    return "";
+  }
+
+  const trimmed = host.trim();
+  if (trimmed.startsWith("[")) {
+    const end = trimmed.indexOf("]");
+    return end >= 0 ? trimmed.slice(0, end + 1) : trimmed;
+  }
+
+  return trimmed.split(":")[0];
+}
+
+function normalizeIp(ip) {
+  if (!ip) {
+    return "";
+  }
+
+  const candidate = String(ip).trim();
+  if (candidate.startsWith("::ffff:")) {
+    return candidate.slice(7);
+  }
+
+  return candidate;
+}
+
+function getRequestIp(req, trustedProxy) {
+  if (trustedProxy) {
+    const forwarded = req.headers["x-forwarded-for"];
+    const first = Array.isArray(forwarded) ? forwarded[0] : String(forwarded ?? "").split(",")[0];
+    const forwardedIp = normalizeIp(first);
+    if (forwardedIp) {
+      return forwardedIp;
+    }
+  }
+
+  return normalizeIp(req.socket?.remoteAddress ?? "");
+}
+
+function createRateLimiter(windowMs, maxRequests) {
+  const buckets = new Map();
+  const safeWindow = Math.max(windowMs, 1);
+  const safeMax = Math.max(maxRequests, 1);
+
+  return {
+    check(key) {
+      const now = Date.now();
+      const bucketKey = key || "unknown";
+      const bucket = buckets.get(bucketKey);
+
+      if (!bucket || now - bucket.windowStart >= safeWindow) {
+        buckets.set(bucketKey, { count: 1, windowStart: now });
+        return { allowed: true, remaining: Math.max(safeMax - 1, 0), retryAfterSeconds: Math.ceil(safeWindow / 1000) };
+      }
+
+      if (bucket.count >= safeMax) {
+        return { allowed: false, remaining: 0, retryAfterSeconds: Math.ceil(safeWindow / 1000) };
+      }
+
+      bucket.count += 1;
+      return {
+        allowed: true,
+        remaining: Math.max(safeMax - bucket.count, 0),
+        retryAfterSeconds: Math.ceil(safeWindow / 1000),
+      };
+    },
+  };
+}
+
 async function readJsonBody(req, maxBodyBytes) {
   const chunks = [];
   let total = 0;
@@ -64,6 +149,18 @@ export async function createHttpMcpServer({ ctx, createMcpServer, options = {} }
     String(options.httpMaxBodyBytes ?? process.env.MCP_HTTP_MAX_BODY_BYTES ?? "1048576"),
     10,
   );
+  const trustedProxy = asBoolean(options.httpTrustedProxy ?? process.env.MCP_HTTP_TRUST_PROXY, false);
+  const allowedOrigins = splitCsv(options.httpAllowedOrigins ?? process.env.MCP_HTTP_ALLOWED_ORIGINS ?? "");
+  const allowedIps = splitCsv(options.httpAllowedIps ?? process.env.MCP_HTTP_ALLOWED_IPS ?? "");
+  const rateLimitWindowMs = Number.parseInt(
+    String(options.httpRateLimitWindowMs ?? process.env.MCP_HTTP_RATE_LIMIT_WINDOW_MS ?? "60000"),
+    10,
+  );
+  const rateLimitMaxRequests = Number.parseInt(
+    String(options.httpRateLimitMaxRequests ?? process.env.MCP_HTTP_RATE_LIMIT_MAX_REQUESTS ?? "60"),
+    10,
+  );
+  const rateLimiter = createRateLimiter(rateLimitWindowMs, rateLimitMaxRequests);
 
   const sessions = new Map();
   const { authMode, tokenSource, authenticator } = parseHttpAuthConfig({
@@ -73,6 +170,8 @@ export async function createHttpMcpServer({ ctx, createMcpServer, options = {} }
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", `http://${host}`);
+    const startTime = Date.now();
+    const ip = getRequestIp(req, trustedProxy);
 
     try {
       if (req.method === "GET" && url.pathname === healthPath) {
@@ -89,6 +188,46 @@ export async function createHttpMcpServer({ ctx, createMcpServer, options = {} }
       if (!["POST", "GET", "DELETE"].includes(req.method ?? "")) {
         res.writeHead(405, { Allow: "POST, GET, DELETE" });
         res.end("Method not allowed");
+        return;
+      }
+
+      if (allowedIps.length > 0 && !allowedIps.includes(ip)) {
+        writeJson(res, 403, {
+          error: "forbidden",
+          message: "Forbidden: IP address is not allowed",
+        });
+        return;
+      }
+
+      const origin = String(req.headers.origin ?? "").trim();
+      if (allowedOrigins.length > 0 && origin && !allowedOrigins.includes(origin)) {
+        writeJson(res, 403, {
+          error: "forbidden",
+          message: "Forbidden: origin is not allowed",
+        });
+        return;
+      }
+
+      const hostHeader = stripPort(String(req.headers.host ?? ""));
+      if (allowedOrigins.length > 0 && !origin && hostHeader && !allowedOrigins.includes(hostHeader)) {
+        writeJson(res, 403, {
+          error: "forbidden",
+          message: "Forbidden: host is not allowed",
+        });
+        return;
+      }
+
+      const rate = rateLimiter.check(ip);
+      if (!rate.allowed) {
+        writeJson(
+          res,
+          429,
+          {
+            error: "rate_limited",
+            message: "Too many requests",
+          },
+          { "Retry-After": String(rate.retryAfterSeconds) },
+        );
         return;
       }
 
@@ -176,6 +315,17 @@ export async function createHttpMcpServer({ ctx, createMcpServer, options = {} }
         error: "internal_error",
         message,
       });
+    } finally {
+      ctx.logger.info(
+        {
+          method: req.method,
+          path: url.pathname,
+          statusCode: res.statusCode,
+          durationMs: Date.now() - startTime,
+          ip,
+        },
+        "http mcp access",
+      );
     }
   });
 
@@ -192,6 +342,11 @@ export async function createHttpMcpServer({ ctx, createMcpServer, options = {} }
       transport: "http",
       authMode,
       tokenSource,
+      trustedProxy,
+      allowedOrigins,
+      allowedIps,
+      rateLimitWindowMs,
+      rateLimitMaxRequests,
       host,
       port,
       mcpPath,

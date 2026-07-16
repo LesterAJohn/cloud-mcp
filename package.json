@@ -11,6 +11,8 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "mcp": "node src/mcp.js",
+    "mcp:http": "node src/mcp.js --transport http",
+    "mcp:both": "node src/mcp.js --transport both",
     "bootstrap:clis": "sh scripts/bootstrap-clis.sh",
     "install:clis": "bash scripts/install-clis.sh",
     "test": "node --test"

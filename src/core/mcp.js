@@ -3,6 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import * as z from "zod/v4";
 
 import { createExecutionContext } from "./context.js";
+import { createHttpMcpServer } from "../http/server.js";
 import {
   forcePushCommandLimits,
   getCommandLimits,
@@ -275,6 +276,16 @@ export async function createCloudMcpServer(options = {}) {
     ...options,
     loggerDestination: process.stderr,
   });
+
+  initializeProviderAuthorizationKey(ctx, options);
+
+  return {
+    ctx,
+    mcpServer: createMcpServerForContext(ctx),
+  };
+}
+
+function createMcpServerForContext(ctx) {
   const providerNames = Object.keys(ctx.vault.get(["providers"], ctx.providers) ?? {}).sort();
 
   const mcpServer = new McpServer(
@@ -287,18 +298,52 @@ export async function createCloudMcpServer(options = {}) {
     },
   );
 
-  initializeProviderAuthorizationKey(ctx, options);
-
   registerProviderTools(mcpServer, ctx, providerNames);
   registerCommandLimitsTools(mcpServer, ctx);
 
-  return { ctx, mcpServer };
+  return mcpServer;
 }
 
 export async function runCloudMcpServer(options = {}) {
-  const { ctx, mcpServer } = await createCloudMcpServer(options);
-  const transport = new StdioServerTransport();
+  const transportMode = String(options.transportMode ?? process.env.MCP_TRANSPORT_MODE ?? "both").toLowerCase();
+  if (!["stdio", "http", "both"].includes(transportMode)) {
+    throw new Error(`Unsupported transport mode '${transportMode}'. Use stdio|http|both.`);
+  }
 
-  ctx.logger.info({ tools: Object.keys(mcpServer._registeredTools ?? {}) }, "starting cloud mcp server");
-  await mcpServer.connect(transport);
+  const { ctx } = await createCloudMcpServer(options);
+  const servers = [];
+
+  if (transportMode === "stdio" || transportMode === "both") {
+    const stdioServer = createMcpServerForContext(ctx);
+    const stdioTransport = new StdioServerTransport();
+    ctx.logger.info({ tools: Object.keys(stdioServer._registeredTools ?? {}) }, "starting cloud mcp stdio transport");
+    await stdioServer.connect(stdioTransport);
+    servers.push(stdioServer);
+  }
+
+  let httpServer;
+  if (transportMode === "http" || transportMode === "both") {
+    httpServer = await createHttpMcpServer({
+      ctx,
+      createMcpServer: () => createMcpServerForContext(ctx),
+      options,
+    });
+  }
+
+  const shutdown = async () => {
+    try {
+      if (httpServer) {
+        await httpServer.close();
+      }
+
+      for (const server of servers) {
+        await server.close();
+      }
+    } finally {
+      process.exit(0);
+    }
+  };
+
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
 }

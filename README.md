@@ -253,9 +253,60 @@ npm start -- tencent cvm DescribeInstances
 
 ## MCP server
 
-Start the MCP server with:
+Start MCP with both stdio and HTTP transports (default):
 
 ```bash
+npm run mcp -- --config cloud-wrap.config.json
+```
+
+Run HTTP-only or stdio-only:
+
+```bash
+npm run mcp:http -- --config cloud-wrap.config.json
+npm run mcp -- --transport stdio --config cloud-wrap.config.json
+```
+
+HTTP defaults:
+
+- `MCP_HTTP_HOST=127.0.0.1`
+- `MCP_HTTP_PORT=3000`
+- `MCP_HTTP_PATH=/mcp`
+- `MCP_HTTP_HEALTH_PATH=/healthz`
+
+Transport mode:
+
+- `MCP_TRANSPORT_MODE=stdio|http|both` (default: `both`)
+
+HTTP authentication framework:
+
+- `MCP_HTTP_AUTH_MODE=none|token|oauth2|both` (default: `none`)
+- Bearer token mode (`token` or `both`):
+  - `MCP_HTTP_AUTH_TOKENS` (comma-separated bearer tokens)
+- OAuth2 introspection mode (`oauth2` or `both`):
+  - `MCP_HTTP_OAUTH2_INTROSPECTION_URL`
+  - `MCP_HTTP_OAUTH2_CLIENT_ID` (optional)
+  - `MCP_HTTP_OAUTH2_CLIENT_SECRET` (optional)
+  - `MCP_HTTP_OAUTH2_REQUIRED_SCOPES` (comma-separated, optional)
+  - `MCP_HTTP_OAUTH2_REQUIRED_AUDIENCE` (comma-separated, optional)
+  - `MCP_HTTP_OAUTH2_TIMEOUT_MS` (optional)
+  - `MCP_HTTP_OAUTH2_CACHE_TTL_MS` (optional)
+
+Example: bearer tokens only
+
+```bash
+export MCP_HTTP_AUTH_MODE=token
+export MCP_HTTP_AUTH_TOKENS="dev-token-1,dev-token-2"
+npm run mcp -- --config cloud-wrap.config.json
+```
+
+Example: OAuth2 introspection only
+
+```bash
+export MCP_HTTP_AUTH_MODE=oauth2
+export MCP_HTTP_OAUTH2_INTROSPECTION_URL="https://auth.example.com/oauth2/introspect"
+export MCP_HTTP_OAUTH2_CLIENT_ID="cloud-mcp"
+export MCP_HTTP_OAUTH2_CLIENT_SECRET="replace-me"
+export MCP_HTTP_OAUTH2_REQUIRED_SCOPES="mcp:invoke"
 npm run mcp -- --config cloud-wrap.config.json
 ```
 

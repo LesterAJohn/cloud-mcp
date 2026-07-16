@@ -32,8 +32,78 @@ test("mcp server registers provider commands", async () => {
       "run_tencent",
       "set_command_limit_section",
       "set_provider",
+      "vault_seed_http_token",
+      "vault_seed_oauth_token",
     ],
   );
+});
+
+test("vault_seed_http_token stores hashed token entry in vault index", async () => {
+  const previousAuthKey = process.env.MCP_PROVIDER_AUTH_KEY;
+  process.env.MCP_PROVIDER_AUTH_KEY = "provider-secret";
+
+  try {
+    const { ctx, mcpServer } = await createCloudMcpServer({
+      config: "cloud-wrap.config.example.json",
+      logLevel: "silent",
+    });
+
+    const result = await mcpServer._registeredTools.vault_seed_http_token.handler({
+      authorizationKey: "provider-secret",
+      userId: "default",
+      scopes: ["mcp:invoke"],
+      audience: ["cloud-mcp"],
+    });
+
+    const payload = JSON.parse(result.content[0].text);
+    assert.equal(typeof payload.token, "string");
+    assert.equal(payload.token.length > 10, true);
+    assert.equal(payload.tokenType, "bearer");
+
+    const stored = ctx.vault.get(["cloud-mcp", "http", "auth", "token-index"], {});
+    assert.equal(typeof stored.tokens[payload.tokenHash], "object");
+    assert.deepEqual(stored.tokens[payload.tokenHash].scopes, ["mcp:invoke"]);
+  } finally {
+    if (previousAuthKey === undefined) {
+      delete process.env.MCP_PROVIDER_AUTH_KEY;
+    } else {
+      process.env.MCP_PROVIDER_AUTH_KEY = previousAuthKey;
+    }
+  }
+});
+
+test("vault_seed_oauth_token stores provided token hash and does not return token", async () => {
+  const previousAuthKey = process.env.MCP_PROVIDER_AUTH_KEY;
+  process.env.MCP_PROVIDER_AUTH_KEY = "provider-secret";
+
+  try {
+    const { ctx, mcpServer } = await createCloudMcpServer({
+      config: "cloud-wrap.config.example.json",
+      logLevel: "silent",
+    });
+
+    const result = await mcpServer._registeredTools.vault_seed_oauth_token.handler({
+      authorizationKey: "provider-secret",
+      token: "oauth-access-token",
+      userId: "user-1",
+      scopes: "mcp:invoke",
+      audience: "cloud-mcp",
+    });
+
+    const payload = JSON.parse(result.content[0].text);
+    assert.equal(payload.token, undefined);
+    assert.equal(payload.tokenType, "oauth2");
+
+    const stored = ctx.vault.get(["cloud-mcp", "http", "auth", "token-index"], {});
+    assert.equal(typeof stored.tokens[payload.tokenHash], "object");
+    assert.equal(stored.tokens[payload.tokenHash].userId, "user-1");
+  } finally {
+    if (previousAuthKey === undefined) {
+      delete process.env.MCP_PROVIDER_AUTH_KEY;
+    } else {
+      process.env.MCP_PROVIDER_AUTH_KEY = previousAuthKey;
+    }
+  }
 });
 
 test("run_provider applies profile settings from provider config", async () => {

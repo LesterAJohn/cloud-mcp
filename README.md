@@ -362,6 +362,8 @@ It registers these tools:
 - `set_command_limit_section`
 - `replace_command_limits`
 - `push_command_limits`
+- `vault_seed_http_token`
+- `vault_seed_oauth_token`
 
 Command-limit MCP management:
 
@@ -381,7 +383,25 @@ Provider vault authorization:
 - Set `MCP_PROVIDER_AUTH_KEY` to store an authorization key in vault at startup.
 - When configured, `get_provider` and `set_provider` require `authorizationKey` in the request input.
 - When configured, `set_command_limit_section`, `replace_command_limits`, and `push_command_limits` also require `authorizationKey`.
+- When configured, `vault_seed_http_token` and `vault_seed_oauth_token` also require `authorizationKey`.
 - Requests with missing or invalid keys are rejected.
+
+HTTP token index management tools:
+
+- `vault_seed_http_token`: generates a random bearer token, stores only its SHA-256 hash in the Vault token index, and returns the generated token once.
+- `vault_seed_oauth_token`: stores a provided OAuth access token hash in the Vault token index (does not return plaintext token).
+
+Both tools support optional:
+
+- `userId`
+- `tokenId`
+- `scopes` (string or array)
+- `audience` (string or array)
+- `expiresAt`
+- `path` (override token index path)
+
+Example `vault_seed_http_token` response fields include `token`, `tokenHash`, `tokenId`, and `indexPath`.
+Example `vault_seed_oauth_token` response fields include `tokenHash`, `tokenId`, and `indexPath`.
 
 ## Container note
 

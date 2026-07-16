@@ -5,6 +5,13 @@ import * as z from "zod/v4";
 import { createExecutionContext } from "./context.js";
 import { createHttpMcpServer } from "../http/server.js";
 import {
+  createBearerToken,
+  createVaultTokenEntry,
+  mergeVaultTokenIndex,
+  normalizeTokenIndexPath,
+  tokenIndexPathToVaultPath,
+} from "../http/tokenIndex.js";
+import {
   forcePushCommandLimits,
   getCommandLimits,
   getSupportedCommandLimitSections,
@@ -271,6 +278,118 @@ function registerCommandLimitsTools(mcpServer, ctx) {
   );
 }
 
+function registerHttpAuthTools(mcpServer, ctx) {
+  async function seedVaultToken({ token, userId, tokenId, scopes, audience, expiresAt, path, tokenType, authorizationKey }) {
+    validateProviderAuthorization(ctx, authorizationKey);
+
+    const indexPath = normalizeTokenIndexPath(path);
+    const vaultPath = tokenIndexPathToVaultPath(indexPath);
+    const existingPayload = ctx.vault.get(vaultPath, {});
+    const { tokenHash, entry } = createVaultTokenEntry({
+      token,
+      userId,
+      tokenId,
+      scopes,
+      audience,
+      expiresAt,
+      tokenType,
+    });
+
+    const merged = mergeVaultTokenIndex(existingPayload, {
+      tokenHash,
+      entry,
+    });
+
+    ctx.vault.set(vaultPath, merged);
+
+    return {
+      ok: true,
+      indexPath,
+      tokenHash,
+      userId: entry.userId,
+      tokenId: entry.tokenId,
+      scopes: entry.scopes,
+      audience: entry.audience,
+      expiresAt: entry.expiresAt ?? null,
+      tokenType: entry.tokenType,
+    };
+  }
+
+  mcpServer.registerTool(
+    "vault_seed_http_token",
+    {
+      description:
+        "Generate an opaque bearer token and store its SHA-256 hash in the Vault HTTP token index (admin auth required when configured)",
+      inputSchema: {
+        authorizationKey: z.string().min(1).optional().describe("Provider vault authorization key"),
+        userId: z.string().min(1).optional().describe("User id associated to this token entry"),
+        tokenId: z.string().min(1).optional().describe("Optional token id label"),
+        scopes: z.union([z.string().min(1), z.array(z.string().min(1))]).optional().describe("Scopes string or array"),
+        audience: z
+          .union([z.string().min(1), z.array(z.string().min(1))])
+          .optional()
+          .describe("Audience string or array"),
+        expiresAt: z.string().min(1).optional().describe("Optional ISO expiration timestamp"),
+        path: z.string().min(1).optional().describe("Vault token index path override"),
+      },
+    },
+    async ({ authorizationKey, userId, tokenId, scopes, audience, expiresAt, path }) => {
+      const token = createBearerToken();
+      const seeded = await seedVaultToken({
+        token,
+        userId,
+        tokenId,
+        scopes,
+        audience,
+        expiresAt,
+        path,
+        tokenType: "bearer",
+        authorizationKey,
+      });
+
+      return toTextContent({
+        ...seeded,
+        token,
+      });
+    },
+  );
+
+  mcpServer.registerTool(
+    "vault_seed_oauth_token",
+    {
+      description:
+        "Store a provided OAuth access token hash in the Vault HTTP token index (admin auth required when configured)",
+      inputSchema: {
+        authorizationKey: z.string().min(1).optional().describe("Provider vault authorization key"),
+        token: z.string().min(1).describe("OAuth access token"),
+        userId: z.string().min(1).optional().describe("User id associated to this token entry"),
+        tokenId: z.string().min(1).optional().describe("Optional token id label"),
+        scopes: z.union([z.string().min(1), z.array(z.string().min(1))]).optional().describe("Scopes string or array"),
+        audience: z
+          .union([z.string().min(1), z.array(z.string().min(1))])
+          .optional()
+          .describe("Audience string or array"),
+        expiresAt: z.string().min(1).optional().describe("Optional ISO expiration timestamp"),
+        path: z.string().min(1).optional().describe("Vault token index path override"),
+      },
+    },
+    async ({ authorizationKey, token, userId, tokenId, scopes, audience, expiresAt, path }) =>
+      toTextContent(
+        await seedVaultToken({
+          token,
+          userId,
+          tokenId,
+          scopes,
+          audience,
+          expiresAt,
+          path,
+          tokenType: "oauth2",
+          authorizationKey,
+        }),
+      ),
+  );
+}
+
 export async function createCloudMcpServer(options = {}) {
   const ctx = await createExecutionContext({
     ...options,
@@ -300,6 +419,7 @@ function createMcpServerForContext(ctx) {
 
   registerProviderTools(mcpServer, ctx, providerNames);
   registerCommandLimitsTools(mcpServer, ctx);
+  registerHttpAuthTools(mcpServer, ctx);
 
   return mcpServer;
 }

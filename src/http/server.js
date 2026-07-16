@@ -66,7 +66,10 @@ export async function createHttpMcpServer({ ctx, createMcpServer, options = {} }
   );
 
   const sessions = new Map();
-  const { authMode, authenticator } = parseHttpAuthConfig(options);
+  const { authMode, tokenSource, authenticator } = parseHttpAuthConfig({
+    ...options,
+    vault: ctx.vault,
+  });
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", `http://${host}`);
@@ -188,6 +191,7 @@ export async function createHttpMcpServer({ ctx, createMcpServer, options = {} }
     {
       transport: "http",
       authMode,
+      tokenSource,
       host,
       port,
       mcpPath,

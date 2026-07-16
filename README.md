@@ -281,7 +281,14 @@ HTTP authentication framework:
 
 - `MCP_HTTP_AUTH_MODE=none|token|oauth2|both` (default: `none`)
 - Bearer token mode (`token` or `both`):
+  - `MCP_HTTP_TOKEN_SOURCE=env|vault` (default: `env`)
   - `MCP_HTTP_AUTH_TOKENS` (comma-separated bearer tokens)
+  - Vault source settings (when `MCP_HTTP_TOKEN_SOURCE=vault`):
+    - `MCP_HTTP_VAULT_TOKEN_INDEX_PATH` (default: `cloud-mcp/http/auth/token-index`)
+    - `MCP_HTTP_VAULT_TOKEN_DEFAULT_USER_ID` (default: `default`)
+    - `MCP_HTTP_VAULT_TOKEN_REQUIRED_SCOPES` (comma-separated, optional)
+    - `MCP_HTTP_VAULT_TOKEN_REQUIRED_AUDIENCE` (comma-separated, optional)
+    - `MCP_HTTP_VAULT_TOKEN_CACHE_TTL_MS` (optional)
 - OAuth2 introspection mode (`oauth2` or `both`):
   - `MCP_HTTP_OAUTH2_INTROSPECTION_URL`
   - `MCP_HTTP_OAUTH2_CLIENT_ID` (optional)
@@ -297,6 +304,32 @@ Example: bearer tokens only
 export MCP_HTTP_AUTH_MODE=token
 export MCP_HTTP_AUTH_TOKENS="dev-token-1,dev-token-2"
 npm run mcp -- --config cloud-wrap.config.json
+```
+
+Example: Vault-backed bearer token index
+
+```bash
+export MCP_HTTP_AUTH_MODE=token
+export MCP_HTTP_TOKEN_SOURCE=vault
+export MCP_HTTP_VAULT_TOKEN_INDEX_PATH="cloud-mcp/http/auth/token-index"
+npm run mcp -- --config cloud-wrap.config.json
+```
+
+Vault token index shape (tokens stored by SHA-256 hash, not plaintext):
+
+```json
+{
+  "tokens": {
+    "<sha256(token)>": {
+      "userId": "default",
+      "tokenId": "tok-123",
+      "active": true,
+      "scopes": ["mcp:invoke"],
+      "audience": ["cloud-mcp"],
+      "expiresAt": "2026-12-31T23:59:59Z"
+    }
+  }
+}
 ```
 
 Example: OAuth2 introspection only

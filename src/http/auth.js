@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 function splitCsv(input) {
   return String(input ?? "")
     .split(",")
@@ -85,6 +87,160 @@ export function createBearerTokenVerifier(input = {}) {
       return {
         type: "token",
       };
+    },
+  };
+}
+
+function normalizeTokenSource(source) {
+  const normalized = String(source ?? "env").trim().toLowerCase();
+  if (["env", "vault"].includes(normalized)) {
+    return normalized;
+  }
+
+  throw new Error("MCP_HTTP_TOKEN_SOURCE must be one of: env, vault");
+}
+
+function parsePathSegments(pathValue, fallbackPath) {
+  const value = String(pathValue ?? fallbackPath)
+    .trim()
+    .replace(/^\/+/, "")
+    .replace(/\/+$/, "");
+
+  return value.split("/").filter((segment) => segment.length > 0);
+}
+
+function isExpired(expiresAt) {
+  if (!expiresAt) {
+    return false;
+  }
+
+  const date = new Date(expiresAt);
+  if (Number.isNaN(date.getTime())) {
+    return false;
+  }
+
+  return date.getTime() <= Date.now();
+}
+
+function findTokenRecord(indexDocument, tokenHash, defaultUserId) {
+  if (!indexDocument || typeof indexDocument !== "object") {
+    return null;
+  }
+
+  if (indexDocument.tokens && typeof indexDocument.tokens === "object") {
+    const tokenRecord = indexDocument.tokens[tokenHash];
+    if (tokenRecord && typeof tokenRecord === "object") {
+      return {
+        userId: tokenRecord.userId ?? defaultUserId,
+        record: tokenRecord,
+      };
+    }
+  }
+
+  if (indexDocument.users && typeof indexDocument.users === "object") {
+    if (defaultUserId) {
+      const defaultToken = indexDocument.users?.[defaultUserId]?.tokens?.[tokenHash];
+      if (defaultToken && typeof defaultToken === "object") {
+        return {
+          userId: defaultUserId,
+          record: defaultToken,
+        };
+      }
+    }
+
+    for (const [userId, userEntry] of Object.entries(indexDocument.users)) {
+      const tokenRecord = userEntry?.tokens?.[tokenHash];
+      if (tokenRecord && typeof tokenRecord === "object") {
+        return {
+          userId,
+          record: tokenRecord,
+        };
+      }
+    }
+  }
+
+  const topLevelRecord = indexDocument[tokenHash];
+  if (topLevelRecord && typeof topLevelRecord === "object") {
+    return {
+      userId: topLevelRecord.userId ?? defaultUserId,
+      record: topLevelRecord,
+    };
+  }
+
+  return null;
+}
+
+export function createVaultTokenVerifier(input = {}) {
+  const vault = input.vault;
+  if (!vault || typeof vault.get !== "function") {
+    throw new Error("vault service is required when MCP_HTTP_TOKEN_SOURCE=vault");
+  }
+
+  const tokenIndexPath = parsePathSegments(input.tokenIndexPath, "cloud-mcp/http/auth/token-index");
+  const requiredScopes = Array.isArray(input.requiredScopes) ? input.requiredScopes : splitCsv(input.requiredScopes);
+  const requiredAudience = Array.isArray(input.requiredAudience)
+    ? input.requiredAudience
+    : splitCsv(input.requiredAudience);
+  const defaultUserId = String(input.defaultUserId ?? "default").trim() || "default";
+  const cacheTtlMs = Number.parseInt(String(input.cacheTtlMs ?? 15_000), 10);
+
+  const tokenCache = new Map();
+
+  return {
+    async verify(token) {
+      if (!token || typeof token !== "string") {
+        return null;
+      }
+
+      const now = Date.now();
+      const cached = tokenCache.get(token);
+      if (cached && cached.expiresAt > now) {
+        return cached.result;
+      }
+
+      const tokenHash = createHash("sha256").update(token).digest("hex");
+      const indexDocument = vault.get(tokenIndexPath, null);
+      const located = findTokenRecord(indexDocument, tokenHash, defaultUserId);
+
+      if (!located || !located.record) {
+        tokenCache.set(token, { result: null, expiresAt: now + Math.max(cacheTtlMs, 1000) });
+        return null;
+      }
+
+      const record = located.record;
+      if (record.active === false || isExpired(record.expiresAt)) {
+        tokenCache.set(token, { result: null, expiresAt: now + Math.max(cacheTtlMs, 1000) });
+        return null;
+      }
+
+      const scopes = parseScopes(record.scope ?? record.scopes);
+      const audience = parseAudience(record.aud ?? record.audience);
+
+      if (!hasAllRequired(scopes, requiredScopes)) {
+        tokenCache.set(token, { result: null, expiresAt: now + Math.max(cacheTtlMs, 1000) });
+        return null;
+      }
+
+      if (!hasAllRequired(audience, requiredAudience)) {
+        tokenCache.set(token, { result: null, expiresAt: now + Math.max(cacheTtlMs, 1000) });
+        return null;
+      }
+
+      const result = {
+        type: "token",
+        source: "vault",
+        userId: located.userId ?? defaultUserId,
+        tokenId: record.tokenId ?? null,
+        scope: scopes,
+        audience,
+      };
+
+      tokenCache.set(token, {
+        result,
+        expiresAt: now + Math.max(cacheTtlMs, 1000),
+      });
+
+      return result;
     },
   };
 }
@@ -235,8 +391,25 @@ export function createRequestAuthenticator(input = {}) {
 
 export function parseHttpAuthConfig(options = {}) {
   const authMode = normalizeAuthMode(options.authMode ?? process.env.MCP_HTTP_AUTH_MODE ?? "none");
+  const tokenSource = normalizeTokenSource(options.tokenSource ?? process.env.MCP_HTTP_TOKEN_SOURCE ?? "env");
 
   const authTokens = options.authTokens ?? process.env.MCP_HTTP_AUTH_TOKENS ?? "";
+  const vaultTokenConfig = {
+    vault: options.vault,
+    tokenIndexPath: options.vaultTokenIndexPath ?? process.env.MCP_HTTP_VAULT_TOKEN_INDEX_PATH,
+    defaultUserId: options.vaultTokenDefaultUserId ?? process.env.MCP_HTTP_VAULT_TOKEN_DEFAULT_USER_ID,
+    requiredScopes:
+      options.vaultTokenRequiredScopes ??
+      process.env.MCP_HTTP_VAULT_TOKEN_REQUIRED_SCOPES ??
+      options.oauthRequiredScopes ??
+      process.env.MCP_HTTP_OAUTH2_REQUIRED_SCOPES,
+    requiredAudience:
+      options.vaultTokenRequiredAudience ??
+      process.env.MCP_HTTP_VAULT_TOKEN_REQUIRED_AUDIENCE ??
+      options.oauthRequiredAudience ??
+      process.env.MCP_HTTP_OAUTH2_REQUIRED_AUDIENCE,
+    cacheTtlMs: options.vaultTokenCacheTtlMs ?? process.env.MCP_HTTP_VAULT_TOKEN_CACHE_TTL_MS,
+  };
   const oauthConfig = {
     introspectionUrl: options.oauthIntrospectionUrl ?? process.env.MCP_HTTP_OAUTH2_INTROSPECTION_URL,
     clientId: options.oauthClientId ?? process.env.MCP_HTTP_OAUTH2_CLIENT_ID,
@@ -247,14 +420,18 @@ export function parseHttpAuthConfig(options = {}) {
     cacheTtlMs: options.oauthCacheTtlMs ?? process.env.MCP_HTTP_OAUTH2_CACHE_TTL_MS,
   };
 
-  const bearerVerifier =
-    authMode === "token" || authMode === "both" ? createBearerTokenVerifier({ tokens: authTokens }) : null;
+  let bearerVerifier = null;
+  if (authMode === "token" || authMode === "both") {
+    bearerVerifier =
+      tokenSource === "vault" ? createVaultTokenVerifier(vaultTokenConfig) : createBearerTokenVerifier({ tokens: authTokens });
+  }
 
   const oauth2Verifier =
     authMode === "oauth2" || authMode === "both" ? createOAuth2IntrospectionVerifier(oauthConfig) : null;
 
   return {
     authMode,
+    tokenSource,
     authenticator: createRequestAuthenticator({
       authMode,
       bearerVerifier,

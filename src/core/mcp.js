@@ -55,7 +55,8 @@ function registerProviderTools(mcpServer, ctx, providerNames) {
   mcpServer.registerTool(
     "list_providers",
     {
-      description: "List all providers registered in the vault",
+      description:
+        "Read-only. List provider names currently available in the vault/config store. Use this before get_provider or run_provider when you need to discover the active provider list; it does not add, remove, or validate provider configs.",
     },
     async () => toTextContent(providerNames),
   );
@@ -63,10 +64,11 @@ function registerProviderTools(mcpServer, ctx, providerNames) {
   mcpServer.registerTool(
     "get_provider",
     {
-      description: "Get a provider configuration from the vault",
+      description:
+        "Read-only. Fetch one provider configuration from the vault. Use it to inspect the stored command, env, and profile settings before editing or running a provider. Returns null when the provider is missing; if provider vault authorization is enabled, authorizationKey is required.",
       inputSchema: {
-        provider: z.string().describe("Provider name"),
-        authorizationKey: z.string().min(1).optional().describe("Provider vault authorization key"),
+        provider: z.string().min(1).describe("Provider name as stored in the vault, for example aws or gcp"),
+        authorizationKey: z.string().min(1).optional().describe("Required only when MCP_PROVIDER_AUTH_KEY is configured"),
       },
     },
     async ({ provider, authorizationKey }) => {
@@ -78,34 +80,37 @@ function registerProviderTools(mcpServer, ctx, providerNames) {
   mcpServer.registerTool(
     "set_provider",
     {
-      description: "Store a provider configuration in the vault",
+      description:
+        "Mutating and high-risk. Store or replace a provider configuration in the vault, then expose it through the provider tool list. Use this to register a new cloud CLI or update the stored command/env/profile mapping; if provider vault authorization is enabled, authorizationKey is required.",
       inputSchema: {
-        provider: z.string().describe("Provider name"),
-        authorizationKey: z.string().min(1).optional().describe("Provider vault authorization key"),
+        provider: z.string().min(1).describe("Provider name as stored in the vault, for example aws or azure"),
+        authorizationKey: z.string().min(1).optional().describe("Required only when MCP_PROVIDER_AUTH_KEY is configured"),
         config: z
           .object({
-            command: z.string().min(1),
-            env: z.record(z.string(), z.string()).default({}),
-            defaultProfile: z.string().min(1).optional(),
+            command: z.string().min(1).describe("CLI command to execute, for example aws or gcloud"),
+            env: z.record(z.string(), z.string()).default({}).describe("Base environment variables injected for every run"),
+            defaultProfile: z.string().min(1).optional().describe("Optional default profile name"),
             profiles: z
               .record(
                 z.string(),
                 z.object({
-                  args: z.array(z.string()).default([]),
-                  env: z.record(z.string(), z.string()).default({}),
-                  users: z.array(z.string()).default([]),
+                  args: z.array(z.string()).default([]).describe("Extra argv segments for this profile"),
+                  env: z.record(z.string(), z.string()).default({}).describe("Environment overrides for this profile"),
+                  users: z.array(z.string()).default([]).describe("Allowed user identities; empty means allow all"),
                 }),
               )
-              .default({}),
+              .default({})
+              .describe("Profile-specific args, env, and user access rules"),
             profileSupport: z
               .object({
-                mode: z.enum(["arg", "env"]),
-                flag: z.string().min(1).optional(),
-                envVar: z.string().min(1).optional(),
+                mode: z.enum(["arg", "env"]).describe("How profile selection is passed to the CLI"),
+                flag: z.string().min(1).optional().describe("CLI flag name when mode is arg"),
+                envVar: z.string().min(1).optional().describe("Environment variable name when mode is env"),
               })
-              .optional(),
+              .optional()
+              .describe("Optional CLI-specific profile wiring"),
           })
-          .describe("Provider config"),
+          .describe("Provider config payload to persist"),
       },
     },
     async ({ provider, config, authorizationKey }) => {
@@ -123,12 +128,16 @@ function registerProviderTools(mcpServer, ctx, providerNames) {
   mcpServer.registerTool(
     "run_provider",
     {
-      description: "Run a provider CLI command",
+      description:
+        "Executes a provider CLI command. High-risk because it spawns the configured CLI and can reach external cloud APIs. Use this when you need a dynamic provider name; prefer run_<provider> for a fixed provider. args must be literal argv segments, not shell text, and provider limits or profile access checks can reject the request.",
       inputSchema: {
-        provider: z.string().describe("Provider name"),
-        args: z.array(z.string()).default([]).describe("Arguments passed to the provider CLI"),
-        profile: z.string().min(1).optional().describe("Optional provider profile/context name"),
-        user: z.string().min(1).optional().describe("Optional user identity for profile access checks"),
+        provider: z.string().min(1).describe("Provider name as configured in the vault"),
+        args: z
+          .array(z.string())
+          .default([])
+          .describe("Literal argv segments passed to the CLI, for example ['sts', 'get-caller-identity']"),
+        profile: z.string().min(1).optional().describe("Optional provider profile or context name"),
+        user: z.string().min(1).optional().describe("Optional user identity used for profile access checks"),
       },
     },
     async ({ provider, args, profile, user }) => {
@@ -141,11 +150,15 @@ function registerProviderTools(mcpServer, ctx, providerNames) {
     mcpServer.registerTool(
       `run_${provider}`,
       {
-        description: `Run the ${provider} CLI command`,
+        description:
+          `Executes the ${provider} CLI command. High-risk because it runs the configured binary and can change or query cloud state. Use this when the provider is fixed; args must be literal argv segments, not shell text, and profile or command-limit checks can reject the request.`,
         inputSchema: {
-          args: z.array(z.string()).default([]).describe("Arguments passed to the provider CLI"),
-          profile: z.string().min(1).optional().describe("Optional provider profile/context name"),
-          user: z.string().min(1).optional().describe("Optional user identity for profile access checks"),
+          args: z
+            .array(z.string())
+            .default([])
+            .describe("Literal argv segments passed to the CLI, for example ['projects', 'list']"),
+          profile: z.string().min(1).optional().describe("Optional provider profile or context name"),
+          user: z.string().min(1).optional().describe("Optional user identity used for profile access checks"),
         },
       },
       async ({ args, profile, user }) => {
@@ -162,7 +175,8 @@ function registerCommandLimitsTools(mcpServer, ctx) {
   mcpServer.registerTool(
     "get_command_limits",
     {
-      description: "Get effective command limits currently stored in database",
+      description:
+        "Read-only. Return the effective command-limit policy currently loaded from the database. Use this before editing limits or debugging denied commands; it reflects the normalized canonical sections that are actually enforced at runtime.",
     },
     async () => toTextContent(await getCommandLimits(ctx)),
   );
@@ -170,9 +184,10 @@ function registerCommandLimitsTools(mcpServer, ctx) {
   mcpServer.registerTool(
     "set_command_limit_section",
     {
-      description: "Set one provider command-limit section in database and force-push cloud-command-limits JSON",
+      description:
+        "Mutating and high-risk. Replace one provider command-limit section in the database and then force-push the effective policy to the configured JSON target. Use canonical section names or supported aliases; allowedPrefixes are literal command prefixes such as s3 or sts.get-caller-identity, not shell globs. If provider vault authorization is enabled, authorizationKey is required.",
       inputSchema: {
-        authorizationKey: z.string().min(1).optional().describe("Provider vault authorization key"),
+        authorizationKey: z.string().min(1).optional().describe("Required only when MCP_PROVIDER_AUTH_KEY is configured"),
         provider: z
           .enum([
             "aws",
@@ -206,12 +221,15 @@ function registerCommandLimitsTools(mcpServer, ctx) {
             "hcloud",
             "hcloud.*",
           ])
-          .describe("Provider section"),
-        allowedPrefixes: z.array(z.string()).default([]).describe("Allowed command prefixes for the section"),
+          .describe("Provider section to replace"),
+        allowedPrefixes: z
+          .array(z.string())
+          .default([])
+          .describe("Allowed command prefixes for the section; empty array allows everything for that provider"),
         pushTarget: z
           .enum(["auto", "internal", "external"])
           .default("auto")
-          .describe("Force-push target for cloud-command-limits JSON"),
+          .describe("Where to force-push the JSON copy after the database update"),
       },
     },
     async ({ provider, allowedPrefixes, pushTarget, authorizationKey }) => {
@@ -229,9 +247,10 @@ function registerCommandLimitsTools(mcpServer, ctx) {
   mcpServer.registerTool(
     "replace_command_limits",
     {
-      description: "Replace all command-limit sections in database and force-push cloud-command-limits JSON",
+      description:
+        "Mutating and high-risk. Replace the entire command-limit policy in the database and then force-push the effective JSON copy. Use this for full policy resets or bulk edits; the payload must include the canonical provider sections, and if provider vault authorization is enabled, authorizationKey is required.",
       inputSchema: {
-        authorizationKey: z.string().min(1).optional().describe("Provider vault authorization key"),
+        authorizationKey: z.string().min(1).optional().describe("Required only when MCP_PROVIDER_AUTH_KEY is configured"),
         commandLimits: z
           .object({
             "aws.*": z.array(z.string()).default([]),
@@ -244,11 +263,11 @@ function registerCommandLimitsTools(mcpServer, ctx) {
             "tencent.*": z.array(z.string()).default([]),
             "huawei.*": z.array(z.string()).default([]),
           })
-          .describe("Full canonical command-limits payload"),
+          .describe("Full canonical command-limits payload using aws.*, gcp.*, azure.*, oci.*, alibaba.*, digitalocean.*, ibmcloud.*, tencent.*, and huawei.*"),
         pushTarget: z
           .enum(["auto", "internal", "external"])
           .default("auto")
-          .describe("Force-push target for cloud-command-limits JSON"),
+          .describe("Where to force-push the JSON copy after the database update"),
       },
     },
     async ({ commandLimits, pushTarget, authorizationKey }) => {
@@ -262,13 +281,14 @@ function registerCommandLimitsTools(mcpServer, ctx) {
   mcpServer.registerTool(
     "push_command_limits",
     {
-      description: "Force-push DB command limits to internal or external cloud-command-limits JSON",
+      description:
+        "Mutating and high-risk. Force-push the current database-backed command limits to the internal file or external source without changing the database itself. Use this after manual DB edits or to sync the JSON artifact; if provider vault authorization is enabled, authorizationKey is required. The auto target prefers the external source when one is configured.",
       inputSchema: {
-        authorizationKey: z.string().min(1).optional().describe("Provider vault authorization key"),
+        authorizationKey: z.string().min(1).optional().describe("Required only when MCP_PROVIDER_AUTH_KEY is configured"),
         pushTarget: z
           .enum(["auto", "internal", "external"])
           .default("auto")
-          .describe("Force-push target for cloud-command-limits JSON"),
+          .describe("Choose internal file, external source, or auto selection"),
       },
     },
     async ({ pushTarget, authorizationKey }) => {
@@ -319,18 +339,21 @@ function registerHttpAuthTools(mcpServer, ctx) {
     "vault_seed_http_token",
     {
       description:
-        "Generate an opaque bearer token and store its SHA-256 hash in the Vault HTTP token index (admin auth required when configured)",
+        "Mutating and high-risk. Generate a new bearer token, store only its SHA-256 hash in the Vault HTTP token index, and return the plaintext token exactly once. Use this to provision HTTP auth credentials; if provider vault authorization is enabled, authorizationKey is required.",
       inputSchema: {
-        authorizationKey: z.string().min(1).optional().describe("Provider vault authorization key"),
-        userId: z.string().min(1).optional().describe("User id associated to this token entry"),
-        tokenId: z.string().min(1).optional().describe("Optional token id label"),
-        scopes: z.union([z.string().min(1), z.array(z.string().min(1))]).optional().describe("Scopes string or array"),
+        authorizationKey: z.string().min(1).optional().describe("Required only when MCP_PROVIDER_AUTH_KEY is configured"),
+        userId: z.string().min(1).optional().describe("User id stored with the token entry; defaults to MCP_HTTP_VAULT_TOKEN_DEFAULT_USER_ID or default"),
+        tokenId: z.string().min(1).optional().describe("Optional token id label for auditing and rotation"),
+        scopes: z
+          .union([z.string().min(1), z.array(z.string().min(1))])
+          .optional()
+          .describe("Scopes as a comma-separated string or array of strings"),
         audience: z
           .union([z.string().min(1), z.array(z.string().min(1))])
           .optional()
-          .describe("Audience string or array"),
-        expiresAt: z.string().min(1).optional().describe("Optional ISO expiration timestamp"),
-        path: z.string().min(1).optional().describe("Vault token index path override"),
+          .describe("Audience as a comma-separated string or array of strings"),
+        expiresAt: z.string().min(1).optional().describe("Optional ISO-8601 expiration timestamp"),
+        path: z.string().min(1).optional().describe("Override for the Vault token index path"),
       },
     },
     async ({ authorizationKey, userId, tokenId, scopes, audience, expiresAt, path }) => {
@@ -358,19 +381,22 @@ function registerHttpAuthTools(mcpServer, ctx) {
     "vault_seed_oauth_token",
     {
       description:
-        "Store a provided OAuth access token hash in the Vault HTTP token index (admin auth required when configured)",
+        "Mutating and high-risk. Store a provided OAuth access token as a SHA-256 hash in the Vault HTTP token index. Use this when an external OAuth provider already issued the token; the plaintext token is never returned, and if provider vault authorization is enabled, authorizationKey is required.",
       inputSchema: {
-        authorizationKey: z.string().min(1).optional().describe("Provider vault authorization key"),
-        token: z.string().min(1).describe("OAuth access token"),
-        userId: z.string().min(1).optional().describe("User id associated to this token entry"),
-        tokenId: z.string().min(1).optional().describe("Optional token id label"),
-        scopes: z.union([z.string().min(1), z.array(z.string().min(1))]).optional().describe("Scopes string or array"),
+        authorizationKey: z.string().min(1).optional().describe("Required only when MCP_PROVIDER_AUTH_KEY is configured"),
+        token: z.string().min(1).describe("OAuth access token to hash and store"),
+        userId: z.string().min(1).optional().describe("User id stored with the token entry; defaults to MCP_HTTP_VAULT_TOKEN_DEFAULT_USER_ID or default"),
+        tokenId: z.string().min(1).optional().describe("Optional token id label for auditing and rotation"),
+        scopes: z
+          .union([z.string().min(1), z.array(z.string().min(1))])
+          .optional()
+          .describe("Scopes as a comma-separated string or array of strings"),
         audience: z
           .union([z.string().min(1), z.array(z.string().min(1))])
           .optional()
-          .describe("Audience string or array"),
-        expiresAt: z.string().min(1).optional().describe("Optional ISO expiration timestamp"),
-        path: z.string().min(1).optional().describe("Vault token index path override"),
+          .describe("Audience as a comma-separated string or array of strings"),
+        expiresAt: z.string().min(1).optional().describe("Optional ISO-8601 expiration timestamp"),
+        path: z.string().min(1).optional().describe("Override for the Vault token index path"),
       },
     },
     async ({ authorizationKey, token, userId, tokenId, scopes, audience, expiresAt, path }) =>

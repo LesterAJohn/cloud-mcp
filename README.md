@@ -451,65 +451,34 @@ Notes:
 - If your environment needs auth, set env vars before launching the client (`MCP_HTTP_*`, `MCP_PROVIDER_AUTH_KEY`, Vault vars).
 - For remote HTTP integration instead of stdio, run `npm run mcp:http` and register endpoint `http://127.0.0.1:3000/mcp` with the client that supports streamable HTTP MCP.
 
-It registers these tools:
+## MCP Tool Reference
 
-- `list_providers`
-- `get_provider`
-- `set_provider`
-- `run_provider`
-- `run_aws`
-- `run_gcp`
-- `run_azure`
-- `run_oci`
-- `run_alibaba`
-- `run_digitalocean`
-- `run_ibmcloud`
-- `run_tencent`
-- `run_huawei`
-- `get_command_limits`
-- `set_command_limit_section`
-- `replace_command_limits`
-- `push_command_limits`
-- `vault_seed_http_token`
-- `vault_seed_oauth_token`
+The MCP server exposes the following tools. Read-only tools are safe to inspect state; mutating tools change vault, database, or token-index data and should be used carefully.
 
-Command-limit MCP management:
+- `list_providers` is read-only. Use it to discover which provider names are currently available before calling `get_provider` or `run_provider`.
+- `get_provider` is read-only. It returns the stored provider configuration or `null` if missing. If `MCP_PROVIDER_AUTH_KEY` is set, `authorizationKey` is required.
+- `set_provider` mutates vault state and is high-risk because it changes what future CLI calls execute. Use it to register or replace a provider config. The required payload is `config.command`; `env` defaults to `{}`; `profiles.*.users` is optional and an empty list means any user may use the profile.
+- `run_provider` is high-risk because it spawns the configured provider CLI and can reach external cloud APIs. `args` must be literal argv segments, not shell text. Use this when the provider name is dynamic.
+- `run_<provider>` is the provider-specific version of `run_provider`. Use it when the provider is fixed and you want a narrower tool surface.
+- `get_command_limits` is read-only. It returns the normalized command-limit policy currently loaded from the database.
+- `set_command_limit_section` mutates the database and then force-pushes the current policy to the selected JSON target. Use supported provider aliases like `gcloud`, `az`, `aliyun`, `doctl`, `tccli`, or `hcloud`; the runtime normalizes them to canonical sections.
+- `replace_command_limits` replaces the entire command-limit policy in the database and then force-pushes the JSON target. The payload must include the canonical sections `aws.*`, `gcp.*`, `azure.*`, `oci.*`, `alibaba.*`, `digitalocean.*`, `ibmcloud.*`, `tencent.*`, and `huawei.*`.
+- `push_command_limits` does not change the database. It writes the current database-backed policy to the internal file or external source. `pushTarget=auto` prefers the external source when configured, otherwise the internal file.
+- `vault_seed_http_token` generates a new bearer token, stores only its SHA-256 hash in the Vault token index, and returns the plaintext token once. Keep the returned token, because it cannot be recovered later.
+- `vault_seed_oauth_token` stores a provided OAuth access token as a SHA-256 hash in the Vault token index and never returns the plaintext token.
 
-- `get_command_limits`: reads effective command limits from database.
-- `set_command_limit_section`: updates one provider section in database, then force-pushes to JSON target.
-- `replace_command_limits`: replaces all sections in database, then force-pushes to JSON target.
-- `push_command_limits`: force-pushes current DB limits to JSON target without modifying DB.
+Common prerequisites and constraints:
 
-Force-push target:
+- Set `MCP_PROVIDER_AUTH_KEY` when you want provider vault and token-index admin tools to require `authorizationKey`.
+- `scopes` and `audience` accept either a comma-separated string or an array of strings.
+- `expiresAt` should be an ISO-8601 timestamp.
+- `path` overrides the Vault token index path when you need a non-default location.
+- Provider CLI resolution still follows the runtime order documented above: repository-local bin, `<PROVIDER>_CLI_BIN`, then `PATH`.
 
-- `pushTarget=internal`: writes to local `mcp/cloud-command-limits.json` (or configured internal path).
-- `pushTarget=external`: writes to `CLOUD_COMMAND_LIMITS_SOURCE`.
-- `pushTarget=auto`: uses external source when configured, otherwise internal file.
+Example response shapes:
 
-Provider vault authorization:
-
-- Set `MCP_PROVIDER_AUTH_KEY` to store an authorization key in vault at startup.
-- When configured, `get_provider` and `set_provider` require `authorizationKey` in the request input.
-- When configured, `set_command_limit_section`, `replace_command_limits`, and `push_command_limits` also require `authorizationKey`.
-- When configured, `vault_seed_http_token` and `vault_seed_oauth_token` also require `authorizationKey`.
-- Requests with missing or invalid keys are rejected.
-
-HTTP token index management tools:
-
-- `vault_seed_http_token`: generates a random bearer token, stores only its SHA-256 hash in the Vault token index, and returns the generated token once.
-- `vault_seed_oauth_token`: stores a provided OAuth access token hash in the Vault token index (does not return plaintext token).
-
-Both tools support optional:
-
-- `userId`
-- `tokenId`
-- `scopes` (string or array)
-- `audience` (string or array)
-- `expiresAt`
-- `path` (override token index path)
-
-Example `vault_seed_http_token` response fields include `token`, `tokenHash`, `tokenId`, and `indexPath`.
-Example `vault_seed_oauth_token` response fields include `tokenHash`, `tokenId`, and `indexPath`.
+- `vault_seed_http_token` returns `token`, `tokenHash`, `tokenId`, `indexPath`, and related entry fields.
+- `vault_seed_oauth_token` returns `tokenHash`, `tokenId`, `indexPath`, and related entry fields.
 
 ## Container note
 

@@ -33,6 +33,185 @@ function toTextContent(value) {
   };
 }
 
+function registerCatalogedTool(mcpServer, toolCatalog, name, config, handler) {
+  toolCatalog.push({
+    name,
+    description: config.description,
+    inputSchema: config.inputSchema ?? null,
+  });
+
+  mcpServer.registerTool(name, config, handler);
+}
+
+function splitIntoSentences(text) {
+  return String(text)
+    .split(/(?<=[.!?])\s+/u)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function classifyToolRisk(description) {
+  if (description.startsWith("Read-only.")) {
+    return "read-only";
+  }
+
+  if (description.includes("Mutating and high-risk") || description.includes("High-risk") || description.includes("high-risk")) {
+    return "high-risk";
+  }
+
+  return "standard";
+}
+
+function buildToolRecommendation(name, description) {
+  const sentences = splitIntoSentences(description);
+  const whenToUse = sentences[1] ?? sentences[0] ?? "Use when you need this capability.";
+  const workflowHints = [];
+
+  if (name === "get_provider" || name === "run_provider") {
+    workflowHints.push("Call list_providers first when you do not already know the provider name.");
+  }
+
+  if (name.startsWith("run_")) {
+    workflowHints.push("Pass literal argv segments in args instead of shell text.");
+  }
+
+  if (name.startsWith("set_") || name.startsWith("replace_") || name.startsWith("push_")) {
+    workflowHints.push("Read the current state first so you can verify the exact mutation target and payload.");
+  }
+
+  if (name.includes("command_limit")) {
+    workflowHints.push("Use canonical provider sections or supported aliases exactly as described by the schema.");
+  }
+
+  if (name.startsWith("vault_seed_")) {
+    workflowHints.push("Treat returned or supplied tokens as sensitive and verify the active HTTP auth mode before seeding credentials.");
+  }
+
+  if (workflowHints.length === 0) {
+    workflowHints.push("Match your arguments to the input schema and use the description as the execution guardrail.");
+  }
+
+  return {
+    whenToUse,
+    workflowHints,
+  };
+}
+
+function toJsonInputSchema(inputSchema) {
+  if (!inputSchema) {
+    return null;
+  }
+
+  return z.toJSONSchema(z.object(inputSchema));
+}
+
+function tokenize(text) {
+  return String(text)
+    .toLowerCase()
+    .split(/[^a-z0-9_]+/u)
+    .filter(Boolean);
+}
+
+function scoreToolMatch(tool, queryTokens) {
+  if (queryTokens.length === 0) {
+    return 1;
+  }
+
+  const haystacks = [tool.name, tool.description, tool.recommendation.whenToUse, ...tool.recommendation.workflowHints].map((value) =>
+    String(value).toLowerCase(),
+  );
+
+  let score = 0;
+  for (const token of queryTokens) {
+    if (tool.name === token) {
+      score += 6;
+      continue;
+    }
+
+    if (tool.name.includes(token)) {
+      score += 4;
+      continue;
+    }
+
+    if (haystacks.some((value) => value.includes(token))) {
+      score += 2;
+    }
+  }
+
+  return score;
+}
+
+function buildToolDiscoveryEntry(tool) {
+  return {
+    name: tool.name,
+    description: tool.description,
+    risk: classifyToolRisk(tool.description),
+    recommendation: buildToolRecommendation(tool.name, tool.description),
+    inputSchema: toJsonInputSchema(tool.inputSchema),
+  };
+}
+
+function registerDiscoveryTools(mcpServer, toolCatalog) {
+  mcpServer.registerTool(
+    "discover_tools",
+    {
+      description:
+        "Read-only. Discover all other MCP tools, inspect their input schemas, and get query-based recommendations for which tool to call next. Use this when you need schema discovery, want to map a task to the right cloud-mcp tool, or need a safe starting point before invoking high-risk tools.",
+      inputSchema: {
+        query: z
+          .string()
+          .min(1)
+          .optional()
+          .describe("Optional task description or keyword query used to rank the most relevant tools"),
+        tool: z
+          .string()
+          .min(1)
+          .optional()
+          .describe("Optional exact tool name when you want the schema and recommendation for one tool"),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .default(25)
+          .describe("Maximum number of returned tools when query ranking is applied"),
+      },
+    },
+    async ({ query, tool, limit }) => {
+      const entries = toolCatalog.map(buildToolDiscoveryEntry);
+      const normalizedQuery = typeof query === "string" ? query.trim() : "";
+      const queryTokens = tokenize(normalizedQuery);
+
+      let filtered = entries;
+      if (tool) {
+        filtered = entries.filter((entry) => entry.name === tool);
+      } else if (queryTokens.length > 0) {
+        filtered = entries
+          .map((entry) => ({ entry, score: scoreToolMatch(entry, queryTokens) }))
+          .filter(({ score }) => score > 0)
+          .sort((left, right) => right.score - left.score || left.entry.name.localeCompare(right.entry.name))
+          .slice(0, limit)
+          .map(({ entry, score }) => ({
+            ...entry,
+            matchScore: score,
+          }));
+      }
+
+      if (!tool && queryTokens.length === 0) {
+        filtered = entries.sort((left, right) => left.name.localeCompare(right.name));
+      }
+
+      return toTextContent({
+        query: normalizedQuery || null,
+        tool: tool ?? null,
+        totalTools: entries.length,
+        returnedTools: filtered.length,
+        tools: filtered,
+      });
+    },
+  );
+}
+
 function initializeProviderAuthorizationKey(ctx, options = {}) {
   const configuredKey = options.providerAuthorizationKey ?? process.env.MCP_PROVIDER_AUTH_KEY;
   if (typeof configuredKey === "string" && configuredKey.length > 0) {
@@ -51,8 +230,10 @@ function validateProviderAuthorization(ctx, authorizationKey) {
   }
 }
 
-function registerProviderTools(mcpServer, ctx, providerNames) {
-  mcpServer.registerTool(
+function registerProviderTools(mcpServer, ctx, providerNames, toolCatalog) {
+  registerCatalogedTool(
+    mcpServer,
+    toolCatalog,
     "list_providers",
     {
       description:
@@ -61,7 +242,9 @@ function registerProviderTools(mcpServer, ctx, providerNames) {
     async () => toTextContent(providerNames),
   );
 
-  mcpServer.registerTool(
+  registerCatalogedTool(
+    mcpServer,
+    toolCatalog,
     "get_provider",
     {
       description:
@@ -77,7 +260,9 @@ function registerProviderTools(mcpServer, ctx, providerNames) {
     },
   );
 
-  mcpServer.registerTool(
+  registerCatalogedTool(
+    mcpServer,
+    toolCatalog,
     "set_provider",
     {
       description:
@@ -125,7 +310,9 @@ function registerProviderTools(mcpServer, ctx, providerNames) {
     },
   );
 
-  mcpServer.registerTool(
+  registerCatalogedTool(
+    mcpServer,
+    toolCatalog,
     "run_provider",
     {
       description:
@@ -147,7 +334,9 @@ function registerProviderTools(mcpServer, ctx, providerNames) {
   );
 
   for (const provider of providerNames) {
-    mcpServer.registerTool(
+    registerCatalogedTool(
+      mcpServer,
+      toolCatalog,
       `run_${provider}`,
       {
         description:
@@ -169,10 +358,12 @@ function registerProviderTools(mcpServer, ctx, providerNames) {
   }
 }
 
-function registerCommandLimitsTools(mcpServer, ctx) {
+function registerCommandLimitsTools(mcpServer, ctx, toolCatalog) {
   const providerSectionEnum = getSupportedCommandLimitSections();
 
-  mcpServer.registerTool(
+  registerCatalogedTool(
+    mcpServer,
+    toolCatalog,
     "get_command_limits",
     {
       description:
@@ -181,7 +372,9 @@ function registerCommandLimitsTools(mcpServer, ctx) {
     async () => toTextContent(await getCommandLimits(ctx)),
   );
 
-  mcpServer.registerTool(
+  registerCatalogedTool(
+    mcpServer,
+    toolCatalog,
     "set_command_limit_section",
     {
       description:
@@ -189,38 +382,7 @@ function registerCommandLimitsTools(mcpServer, ctx) {
       inputSchema: {
         authorizationKey: z.string().min(1).optional().describe("Required only when MCP_PROVIDER_AUTH_KEY is configured"),
         provider: z
-          .enum([
-            "aws",
-            "aws.*",
-            "gcp",
-            "gcp.*",
-            "gcloud",
-            "gcloud.*",
-            "azure",
-            "azure.*",
-            "az",
-            "az.*",
-            "oci",
-            "oci.*",
-            "alibaba",
-            "alibaba.*",
-            "aliyun",
-            "aliyun.*",
-            "digitalocean",
-            "digitalocean.*",
-            "doctl",
-            "doctl.*",
-            "ibmcloud",
-            "ibmcloud.*",
-            "tencent",
-            "tencent.*",
-            "tccli",
-            "tccli.*",
-            "huawei",
-            "huawei.*",
-            "hcloud",
-            "hcloud.*",
-          ])
+          .enum(providerSectionEnum)
           .describe("Provider section to replace"),
         allowedPrefixes: z
           .array(z.string())
@@ -244,7 +406,9 @@ function registerCommandLimitsTools(mcpServer, ctx) {
     },
   );
 
-  mcpServer.registerTool(
+  registerCatalogedTool(
+    mcpServer,
+    toolCatalog,
     "replace_command_limits",
     {
       description:
@@ -278,7 +442,9 @@ function registerCommandLimitsTools(mcpServer, ctx) {
     },
   );
 
-  mcpServer.registerTool(
+  registerCatalogedTool(
+    mcpServer,
+    toolCatalog,
     "push_command_limits",
     {
       description:
@@ -298,7 +464,7 @@ function registerCommandLimitsTools(mcpServer, ctx) {
   );
 }
 
-function registerHttpAuthTools(mcpServer, ctx) {
+function registerHttpAuthTools(mcpServer, ctx, toolCatalog) {
   async function seedVaultToken({ token, userId, tokenId, scopes, audience, expiresAt, path, tokenType, authorizationKey }) {
     validateProviderAuthorization(ctx, authorizationKey);
 
@@ -335,7 +501,9 @@ function registerHttpAuthTools(mcpServer, ctx) {
     };
   }
 
-  mcpServer.registerTool(
+  registerCatalogedTool(
+    mcpServer,
+    toolCatalog,
     "vault_seed_http_token",
     {
       description:
@@ -377,7 +545,9 @@ function registerHttpAuthTools(mcpServer, ctx) {
     },
   );
 
-  mcpServer.registerTool(
+  registerCatalogedTool(
+    mcpServer,
+    toolCatalog,
     "vault_seed_oauth_token",
     {
       description:
@@ -432,6 +602,7 @@ export async function createCloudMcpServer(options = {}) {
 
 function createMcpServerForContext(ctx) {
   const providerNames = Object.keys(ctx.vault.get(["providers"], ctx.providers) ?? {}).sort();
+  const toolCatalog = [];
 
   const mcpServer = new McpServer(
     {
@@ -443,9 +614,10 @@ function createMcpServerForContext(ctx) {
     },
   );
 
-  registerProviderTools(mcpServer, ctx, providerNames);
-  registerCommandLimitsTools(mcpServer, ctx);
-  registerHttpAuthTools(mcpServer, ctx);
+  registerProviderTools(mcpServer, ctx, providerNames, toolCatalog);
+  registerCommandLimitsTools(mcpServer, ctx, toolCatalog);
+  registerHttpAuthTools(mcpServer, ctx, toolCatalog);
+  registerDiscoveryTools(mcpServer, toolCatalog);
 
   return mcpServer;
 }

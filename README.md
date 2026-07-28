@@ -443,7 +443,7 @@ On macOS, edit `~/Library/Application Support/Claude/claude_desktop_config.json`
 
 6. Restart the client app after config changes.
 
-7. Validate tool registration from the client by calling `list_providers` first, then `run_provider`.
+7. Validate tool registration from the client by calling `discover_tools` first, then `list_providers` or `run_provider` based on the returned recommendation.
 
 Notes:
 
@@ -455,6 +455,7 @@ Notes:
 
 The MCP server exposes the following tools. Read-only tools are safe to inspect state; mutating tools change vault, database, or token-index data and should be used carefully.
 
+- `discover_tools` is read-only. Use it first when you need schema discovery, want a recommendation for which MCP tool fits a task, or need the input schema for a specific tool before calling it.
 - `list_providers` is read-only. Use it to discover which provider names are currently available before calling `get_provider` or `run_provider`.
 - `get_provider` is read-only. It returns the stored provider configuration or `null` if missing. If `MCP_PROVIDER_AUTH_KEY` is set, `authorizationKey` is required.
 - `set_provider` mutates vault state and is high-risk because it changes what future CLI calls execute. Use it to register or replace a provider config. The required payload is `config.command`; `env` defaults to `{}`; `profiles.*.users` is optional and an empty list means any user may use the profile.
@@ -469,6 +470,7 @@ The MCP server exposes the following tools. Read-only tools are safe to inspect 
 
 Common prerequisites and constraints:
 
+- `discover_tools` accepts optional `query`, `tool`, and `limit`. Use `tool` for exact schema lookup and `query` when you want ranked suggestions.
 - Set `MCP_PROVIDER_AUTH_KEY` when you want provider vault and token-index admin tools to require `authorizationKey`.
 - `scopes` and `audience` accept either a comma-separated string or an array of strings.
 - `expiresAt` should be an ISO-8601 timestamp.
@@ -477,6 +479,7 @@ Common prerequisites and constraints:
 
 Example response shapes:
 
+- `discover_tools` returns `totalTools`, `returnedTools`, and `tools[]`, where each tool entry includes `name`, `description`, `risk`, `recommendation`, and JSON `inputSchema`.
 - `vault_seed_http_token` returns `token`, `tokenHash`, `tokenId`, `indexPath`, and related entry fields.
 - `vault_seed_oauth_token` returns `tokenHash`, `tokenId`, `indexPath`, and related entry fields.
 

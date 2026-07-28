@@ -15,6 +15,7 @@ test("mcp server registers provider commands", async () => {
   assert.deepEqual(
     Object.keys(mcpServer._registeredTools).sort(),
     [
+      "discover_tools",
       "get_command_limits",
       "get_provider",
       "list_providers",
@@ -36,6 +37,28 @@ test("mcp server registers provider commands", async () => {
       "vault_seed_oauth_token",
     ],
   );
+});
+
+test("discover_tools returns schemas and recommendations for other tools", async () => {
+  const { mcpServer } = await createCloudMcpServer({
+    config: "cloud-wrap.config.example.json",
+    logLevel: "silent",
+  });
+
+  const result = await mcpServer._registeredTools.discover_tools.handler({
+    tool: "run_provider",
+    limit: 5,
+  });
+
+  const payload = JSON.parse(result.content[0].text);
+  assert.equal(payload.totalTools, Object.keys(mcpServer._registeredTools).length - 1);
+  assert.equal(payload.returnedTools, 1);
+  assert.equal(payload.tools[0].name, "run_provider");
+  assert.equal(payload.tools[0].risk, "high-risk");
+  assert.equal(payload.tools[0].inputSchema.type, "object");
+  assert.equal(payload.tools[0].inputSchema.properties.provider.type, "string");
+  assert.equal(payload.tools[0].inputSchema.properties.args.type, "array");
+  assert.match(payload.tools[0].recommendation.workflowHints.join(" "), /literal argv segments/i);
 });
 
 test("vault_seed_http_token stores hashed token entry in vault index", async () => {
